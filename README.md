@@ -2,7 +2,7 @@
 
 ## Overview
 
-Provides a collection of functions to perform an FMMecg3D model. 
+Provides a collection of functions to perform a FMMecg3D model. 
 
 ## Installation
 
