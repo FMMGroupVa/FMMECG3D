@@ -1,2 +1,11 @@
 # FMMECG3D
-Codes to perform a FMM ECG 3D model.
+
+## Overview
+
+Provides a collection of functions to perform an FMMecg3D model. 
+
+## Installation
+
+```
+
+```
