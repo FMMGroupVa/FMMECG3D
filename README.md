@@ -2,11 +2,11 @@
 
 ## Overview
 
-This repository provides a collection of functions to perform a 3D FMMecg model [1]. The model accurately reproduces the electrocardiogram and vectocardiogram signals of any diseased or healthy heart, bringing together different systems in a single model. Furthermore, a novel algorithm accurately identifies the model parameters. This new discovery represents a revolution in electrocardiography research, solving one of the main problems in this field. It is especially useful for the automatic diagnosis of cardiovascular diseases, patient follow-up or decision-making on new therapies.
+This repository provides a collection of functions to perform a 3D FMM<sub>ecg</sub> model [1]. The model accurately reproduces the electrocardiogram and vectocardiogram signals of any diseased or healthy heart, bringing together different systems in a single model. Furthermore, a novel algorithm accurately identifies the model parameters. This new discovery represents a revolution in electrocardiography research, solving one of the main problems in this field. It is especially useful for the automatic diagnosis of cardiovascular diseases, patient follow-up or decision-making on new therapies.
 
 ## How to use
 
-User must load functions to preprocess ECG data (based on PTB-XL data characteristics) and fit the 3D FMMecg model.
+User must load functions to preprocess ECG data (based on PTB-XL data characteristics) and fit the 3D FMM<sub>ecg</sub> model.
 ```
 path <- getwd() # Any desired path
 source(paste0(path, "/runPreprocessing_v4.1.R"))
