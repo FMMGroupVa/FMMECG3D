@@ -4,7 +4,7 @@ This repository provides a collection of functions to perform a 3D FMM<sub>ecg</
 
 ## How to use
 
-User must load functions to preprocess ECG data and fit the 3D FMM<sub>ecg</sub> model.
+Users must load functions to preprocess ECG data and fit the 3D FMM<sub>ecg</sub> model.
 ```
 path <- getwd() # Any desired path
 source(paste0(path, "/runPreprocessing_v4.1.R")) # Data preprocessing
@@ -14,7 +14,7 @@ Preprocessing functions returns preprocessed data, data segmentation in single h
 
 ### Fitting example
 
-Run the code contained in `fittingExample.R`. It allows user to fit ECG beats of the patients #1 and #2 from PTB-XL ECG database (https://physionet.org/content/ptbdb/1.0.0/).
+Run the code contained in `fittingExample.R`. It allows users to fit ECG beats of the patients #1 and #2 from PTB-XL ECG database (https://physionet.org/content/ptbdb/1.0.0/).
 
 ### `fitMultiFMM_ECG` function arguments
 
@@ -25,4 +25,4 @@ Run the code contained in `fittingExample.R`. It allows user to fit ECG beats of
 
 ## References
 
-[1] Rueda, C., Rodríguez-Collado, A., Fernández, I., Canedo, C., Ugarte, M. D., & Larriba, Y. (2022). A Unique Cardiac Electrophysiological 3D Model. arXiv preprint arXiv:2202.03938.
+[1] Rueda, C., Rodríguez-Collado, A., Fernández, I., Canedo, C., Ugarte, M. D., & Larriba, Y. (2022). A unique cardiac electrocardiographic 3D model. Toward interpretable AI diagnosis. iScience, 25(12), 105617. https://doi.org/10.1016/j.isci.2022.105617
