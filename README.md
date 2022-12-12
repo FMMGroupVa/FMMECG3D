@@ -2,7 +2,7 @@
 
 ## Overview
 
-This repository provides a collection of functions to perform a 3D FMM<sub>ecg</sub> model [1]. The model accurately reproduces the electrocardiogram and vectocardiogram signals of any diseased or healthy heart, bringing together different systems in a single model. Furthermore, a novel algorithm accurately identifies the model parameters. This new discovery represents a revolution in electrocardiography research, solving one of the main problems in this field. It is especially useful for the automatic diagnosis of cardiovascular diseases, patient follow-up or decision-making on new therapies.
+This repository provides a collection of functions to perform a 3D FMM<sub>ecg</sub> model [1]. The model accurately reproduces the electrocardiogram signals of any diseased or healthy heart. Furthermore, a novel algorithm accurately identifies the model parameters. This new discovery represents a revolution in electrocardiography research, solving one of the main problems in this field. It is especially useful for the automatic diagnosis of cardiovascular diseases, patient follow-up or decision-making on new therapies.
 
 ## How to use
 
@@ -12,8 +12,7 @@ path <- getwd() # Any desired path
 source(paste0(path, "/runPreprocessing_v4.1.R")) # Data preprocessing
 source(paste0(path, "/FMM_ECG3D_Codes/auxMultiFMM_ECG.R")) # Data analysis
 ```
-
-Contar + cortar,annotations.
+Preprocessing functions returns both preprocessed data and required QRS annotations for the analysis.
 
 ### `fitMultiFMM_ECG` function arguments
 
@@ -22,9 +21,9 @@ Contar + cortar,annotations.
 * maxIter: integer indicating the maximum number of iterations of the 3D backfitting algorithm.
 * parallelize: boolean. When True, a parallelized version of the fitting is performed.
 
-## Fitting example with real cases.
+## Fitting example
 
-Run the code contained in `fittingExample.R`. It allows user to fit ECG beats of the patients #1 and #2 from PTB-XL ECG database.
+Run the code contained in `fittingExample.R`. It allows user to fit ECG beats of the patients #1 and #2 from PTB-XL ECG database (https://physionet.org/content/ptbdb/1.0.0/).
 
 ## References
 
