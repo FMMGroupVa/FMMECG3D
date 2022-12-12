@@ -18,10 +18,8 @@ ecgDataPatient1 <- preprocessedOutput[[2]]
 selectedBeatData <- ecgDataPatient1[as.numeric(beatRefsPatient1[1]):as.numeric(beatRefsPatient1[2]),]
 
 paramsPerLeadPre <- fitMultiFMM_ECG(vDataMatrix = selectedBeatData, 
-                                    annotation = as.numeric(beatRefsPatient1[3]), 
-                                    commonOmega = TRUE, maxIter = 10, 
-                                    weightError = TRUE, parallelize = TRUE)
-
+                                    annotation = as.numeric(beatRefsPatient1[3] - beatRefsPatient1[1]), 
+                                    maxIter = 10, parallelize = TRUE)
 
 
 
