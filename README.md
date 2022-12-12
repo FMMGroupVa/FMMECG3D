@@ -10,18 +10,18 @@ path <- getwd() # Any desired path
 source(paste0(path, "/runPreprocessing_v4.1.R")) # Data preprocessing
 source(paste0(path, "/FMM_ECG3D_Codes/auxMultiFMM_ECG.R")) # Data analysis
 ```
-Preprocessing functions returns preprocessed data, segmentation in single hearthbeats and required QRS annotations for the analysis (see **Fitting example** section).
-
-### `fitMultiFMM_ECG` function arguments
-
-* vDataMatrix: double matrix containing 12 columns corresponding to the standard ECG leads recorded from a heartbeat. If some leads are not availible, values shall be NAs.
-* annotation: integer indicating the QRS annotation.
-* maxIter: integer indicating the maximum number of iterations of the 3D backfitting algorithm.
-* parallelize: boolean. When True, a parallelized version of the fitting is performed.
+Preprocessing functions returns preprocessed data, data segmentation in single hearthbeats and required QRS annotations for the analysis.
 
 ### Fitting example
 
 Run the code contained in `fittingExample.R`. It allows user to fit ECG beats of the patients #1 and #2 from PTB-XL ECG database (https://physionet.org/content/ptbdb/1.0.0/).
+
+### `fitMultiFMM_ECG` function arguments
+
+* vDataMatrix: double matrix containing 12 columns corresponding to the standard ECG leads recorded from a heartbeat. NAs are used for an unavailible lead.
+* annotation: integer indicating the QRS annotation (from 0 to the heathbeat length).
+* maxIter: integer indicating the maximum number of iterations of the 3D backfitting algorithm.
+* parallelize: boolean. When True, a parallelized version of the fitting is performed.
 
 ## References
 
