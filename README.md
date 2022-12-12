@@ -6,20 +6,20 @@ This repository provides a collection of functions to perform a 3D FMM<sub>ecg</
 
 ## How to use
 
-User must load functions to preprocess ECG data (based on PTB-XL data characteristics) and fit the 3D FMM<sub>ecg</sub> model.
+User must load functions to preprocess ECG data and fit the 3D FMM<sub>ecg</sub> model.
 ```
 path <- getwd() # Any desired path
-source(paste0(path, "/runPreprocessing_v4.1.R"))
-source(paste0(path, "/FMM_ECG3D_Codes/auxMultiFMM_ECG.R"))
+source(paste0(path, "/runPreprocessing_v4.1.R")) # Data preprocessing
+source(paste0(path, "/FMM_ECG3D_Codes/auxMultiFMM_ECG.R")) # Data analysis
 ```
+
+Contar + cortar,annotations.
 
 ### `fitMultiFMM_ECG` function arguments
 
-* vDataMatrix: double matrix containing 12 columns, corresponding to the standard ECG leads recorded from a heartbeat. If some leads are not availible, values shall be NAs.
-* annotation: integer containg the QRS annotation (number of the observation where QRS complex starts).
-* commonOmega: boolean indicating if common waves in different directions hace common omegas. As explained in [1], should be True.
+* vDataMatrix: double matrix containing 12 columns corresponding to the standard ECG leads recorded from a heartbeat. If some leads are not availible, values shall be NAs.
+* annotation: integer indicating the QRS annotation.
 * maxIter: integer indicating the maximum number of iterations of the 3D backfitting algorithm.
-* weightError: boolean indicating if the error must be weighted along the leads. In real cases, recomended value is True.
 * parallelize: boolean. When True, a parallelized version of the fitting is performed.
 
 ## Fitting example with real cases.
