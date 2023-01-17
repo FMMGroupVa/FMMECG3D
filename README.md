@@ -1,4 +1,4 @@
-# 3D FMM<sub>ecg</sub> model codes
+# 3D FMM<sub>ecg</sub> model 
 
 This repository provides a collection of functions to perform a 3D FMM<sub>ecg</sub> model [1]. The mathematical formulation of this model accurately reproduces and parametrizes ECG signals of any diseased or healthy heart. The 3D FMM<sub>ecg</sub> model is especially useful for the automatic diagnosis of cardiovascular diseases, patient follow-up or decision-making on new therapies.
 
