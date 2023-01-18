@@ -1,17 +1,22 @@
 # 3D FMM<sub>ecg</sub> 
 
-This repository provides a collection of functions to analyze multi-lead electrocardiogram (ECG) signals using the 3D FMM<sub>ecg</sub> model [1]. The code is developed in the programming language R and requires of the R package FMM [2,3].
+This repository provides a collection of functions to analyse electrocardiogram (ECG) signals using the 3D FMM<sub>ecg</sub> model [1]. It is based on the novel  Frequency Modulated Möbius (FMM) approach recently developed by our group (http://www.eio.uva.es/the-fmm-project/). The code is developed in the programming language R and requires of the R package FMM [2,3].
 
 ## Overview
 
-The 3D FMM<sub>ecg</sub> model is built under the general assumption that the electric field of the heart is a 3-dimensional process and that the 12-lead ECG signals are the projections of that process in different directions. On the one hand, the 3D FMM<sub>ecg</sub> model characerizes the morphology of the five fundamental waves, $P$, $Q$, $R$, $S$ and $T$, of ECG signals in terms of FMM parameters: $A$ (amplitude), $\alpha$ (location), $\beta$ (skewness or upward/downward peak direction) and $\omega$ (kurtosis or broadness) [4]. Indeed, there are a set of FMM parameters that are common to all the leads representing the electric field, and others that are lead-specific, representing how the signal is observed in that given direction. On the other hand, the 3D FMM<sub>ecg</sub> model accurately reproduces realistic 12-lead ECG signals from healthy or pathological hearts. Moderover, the 3D FMM<sub>ecg</sub> model is especially useful for the automatic diagnosis of cardiovascular diseases, patient follow-up, or decision-making on new therapies.
+3D FMM<sub>ecg</sub> is an interpretable, flexible, universal, and freely available approach for the automatic interpretation of ECG. 
+The 3D FMM<sub>ecg</sub> model is built under the general assumption that the electric field of the heart is a 3-dimensional process and that the 12-lead ECG signals are the projections of that process in different directions. On the one hand, the 3D FMM<sub>ecg</sub> model characerizes the morphology of the five fundamental waves, $P$, $Q$, $R$, $S$ and $T$, of ECG signals in terms of FMM parameters: $A$ (amplitude), $\alpha$ (location), $\beta$ (skewness or upward/downward peak direction) and $\omega$ (kurtosis or width), see Figure 1. Indeed, there are a set of FMM parameters ( $\alpha$, $\omega$ ) that are common to all the leads representing the electric field, and others ( $A$, $\beta$ ) that are lead-specific, representing how the signal is observed in that given direction. On the other hand, the 3D FMM<sub>ecg</sub> model accurately reproduces realistic multi-lead ECG signals from healthy or pathological hearts. This property allows to elucidate how any algorithm operates, detecting possible shortcoming problems and identifying the causes of its decisions. Moreover, 3D FMM<sub>ecg</sub> model works regardless the recording device,
+the number of leads, the length of data, or the differences between datasets label distributions. 
+
+<p align="center">
+  <img src="https://user-images.githubusercontent.com/117477025/213187046-2fb6652a-53ed-4f6d-8e1e-ae7f91571e66.jpg" width="450" height="300" alt>
+</p>
+Figure 1: FMM parameter description. An ECG healthy heartbeat with waves decomposition and morphological parameter description
 
 ## How to use
-An algorithm is
-designed to analyze 12-lead ECG fragments of any length. In the preprocessing stage, the signal is divided
-beat by beat. Then, for each beat, parameter estimates are derived. The output of the algorithm provides,
-for each wave, the series of parameter values, corresponding to consecutive beats, which can be summarized to get average patterns as well as the changes in the patterns over time
-### Preprocessing
+3D FMM<sub>ecg</sub> is designed to analyse multi-lead ECG fragments of any length. Data are preprocessed to  achieve reliable ECG fragments and to divide them beat by beat. Then, for each heartbeat, 3D FMM<sub>ecg</sub> provides FMM parameter estimates. For each wave, the series of parameter values, corresponding to consecutive beats, which can be summarized to get average patterns as well as the changes in the patterns over time.
+
+### Data Preprocessing
 
 3D FMM<sub>ecg</sub> code incorporates a standard preprocessing for single or multi-lead ECG data including baseline correction, QRS detection and ECG segmentation,  see [1] for details. 
 
@@ -19,35 +24,31 @@ Users must load functions to preprocess ECG data and run `givePreprocessing_app`
 
 #### `givePreprocessing_app` function arguments
 
-* dataIn: double matrix of 12 columns with raw ECG data across leads. Lead names must be provided as header. NAs are used for an unavailable leads.
+* dataIn: double matrix of 12 columns with raw ECG fragment data across leads. Lead names must be provided as header. NAs are used for an unavailable leads.
 * freqHz: integer indicating indicating the sampling rate in Hertz (Hz).
 
-This function returns the preprocessed data and a matrix containg data segmentation in single hearthbeats and provide QRS annotations.
+This function returns the preprocessed data, QRS annotations, ECG segmentation and lead-specific unreliable heartbeats to be discarded from the analysis.
 
-### 3D FMM<sub>ecg</sub> Model Fitting
+### Data Analysis
 
-```
-path <- getwd() # Any desired path
-source(paste0(path, "/runPreprocessing_v4.1.R")) # Data preprocessing
-source(paste0(path, "/FMM_ECG3D_Codes/auxMultiFMM_ECG.R")) # Data analysis
-```
+Prepocessed ECG fragment is divided into beats wich are subsequently analysed using 3D FMM<sub>ecg</sub> model. For computational efficiently, only the leads: I, II, V1, V2, V3, V4, V5 and V6 are considered for the analysis. The rest are linear combinations of I and II.
 
+Users must load functions to analyse ECG data and run `fitMultiFMM_ECG` function.
+
+#### `fitMultiFMM_ECG` function arguments
+
+* vDataMatrix: double matrix of 12 columns with heartbeat preprocessed ECG data across leads. NAs are used for an unavailable leads.
+* annotation: integer indicating the QRS annotation (from 1 to the heathbeat length).
+
+This function returns FMM wave parameter estimates across the eight leads considered.
 
 ### Fitting example
 
-Run the code in `fittingExample.R` which allows to fit ECG heathbeats of the patients #1 and #2 from PTB-XL database (https://physionet.org/content/ptbdb/1.0.0/).
+Run the code in `fittingExample.R` to analyse using 3D FMM<sub>ecg</sub> a single heartbeat from patient #1 in PTB-XL database (https://physionet.org/content/ptb-xl/1.0.3/).
 
-### `fitMultiFMM_ECG` function arguments
+## Percentile Ranges for 3D FMM<sub>ecg</sub> Indices across NORM patients from PTB-XL.
 
-* vDataMatrix: double matrix containing 12 columns corresponding to the standard ECG leads recorded from a heartbeat. NAs are used for an unavailable leads.
-* annotation: integer indicating the QRS annotation (from 1 to the heathbeat length).
-* maxIter: integer indicating the maximum number of iterations of the 3D FMM backfitting algorithm.
-* parallelize: boolean. If True, a parallelized version of the fitting is performed.
-
-## NORM patients analysis from PTB-XL. Percentile Ranges for 3D FMM<sub>ecg</sub> Indices
-
-PTB-XL database was analyzed using 3D FMM<sub>ecg</sub> model
-
+PTB-XL database was analysed using 3D FMM<sub>ecg</sub> model
 
 
 ||X5._P|X95._P|Mean_P|Sd_P|X5._Q|X95._Q|Mean_Q|Sd_Q|X5._R|X95._R|Mean_R|Sd_R|X5._S|X95._S|Mean_S|Sd_S|X5._T|X95._T|Mean_T|Sd_T
