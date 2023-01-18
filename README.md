@@ -46,7 +46,7 @@ This function returns FMM wave parameter estimates across the eight leads consid
 
 Run the code in `fittingExample.R` to analyse using 3D FMM<sub>ecg</sub> a single heartbeat from patient #1 in PTB-XL database (https://physionet.org/content/ptb-xl/1.0.3/).
 
-## Percentile Ranges for 3D FMM<sub>ecg</sub> Indices across NORM patients from PTB-XL.
+## NORM patient analysis from PTB-XL. Percentile Ranges for 3D FMM<sub>ecg</sub> Indices
 
 PTB-XL database was analysed using 3D FMM<sub>ecg</sub> model
 
