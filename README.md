@@ -18,7 +18,7 @@ Figure 1: Healthy ECG heartbeat with waves decomposition and morphological FMM p
 
 ### Data Preprocessing
 
-3D FMM<sub>ecg</sub> code incorporates a standard preprocessing for single or multi-lead ECG data including baseline correction, QRS detection and ECG segmentation,  see [1] for details. 
+3D FMM<sub>ecg</sub> code incorporates a standard preprocessing for single or multi-lead ECG data including baseline correction, QRS detection and ECG segmentation.
 
 Users must load functions to preprocess ECG data and run `givePreprocessing_app` function.
 
@@ -44,21 +44,21 @@ This function returns FMM wave parameter estimates across the eight leads consid
 
 ### Fitting example
 
-Run the code in `fittingExample.R` to analyse using 3D FMM<sub>ecg</sub> a single heartbeat from patient #1 in PTB-XL database (https://physionet.org/content/ptb-xl/1.0.3/).
+Run the code in `fittingExample.R` to analyse using 3D FMM<sub>ecg</sub> a single heartbeat from patient #1 in PTB-XL database (https://physionet.org/content/ptb-xl/1.0.3/) [4].
 
 ## NORM patient analysis from PTB-XL. Percentile Ranges for 3D FMM<sub>ecg</sub> Indices
 
-PTB-XL is a large dataset of 21837 clinical 12-lead ECGs of 10 second length annotated by two cardiologists with diagnostic labels, based on SCP-ECG statements, and the likelihood information for the  statements [6]. PTB-XL database has been analysed using 3D FMM<sub>ecg</sub> in [1] for patients with likelihood $\geq 80$. In particular, we analysed 9055 patients from PTB-XL labelled as NORM, i.e. with normal ECGs. 
+PTB-XL is a large dataset of 21837 clinical 12-lead ECGs of 10 second length annotated by two cardiologists with diagnostic labels, based on SCP-ECG statements, and the likelihood information for the  statements [5]. PTB-XL database has been analysed using 3D FMM<sub>ecg</sub> in [1] for patients with likelihood $\geq 80$. In particular, we analysed 9055 patients from PTB-XL labelled as NORM, i.e. with normal ECGs. 
 
-The normal percentile ranges ($P_5}$, $P_{95}$) of several 3D FMM<sub>ecg</sub> indices calculated from NORM patients are specially useful for identifyng noisy and/or pathological ECG patters, as those with values out such ranges. The FMM-based incdices for which these ranges were computed are: 
+The normal percentile ranges ($P_5}$, $P_{95}$) of several related 3D FMM<sub>ecg</sub> indices calculated from NORM patients are specially useful for identifyng noisy and/or pathological ECG patters, as those with values out such ranges. The FMM-based incdices for which these ranges were computed are: 
 
-* FMM parameter estimates.
-* RR: duration of R-R interval in milisecons (ms).
+* FMM parameterS: $A, \beta$ are lead-specific. $\alpha, \omega$ are equal across leads.
+* $Var_J$: measure of the relative relevance of wave J, J=P, Q, R, S, T. For a given lead, it is calculated as the variability the wave $J$ explains, see [5] for details.
+* $R^2:$ measure of the accuracy of the model across leads, see [5] for details.
+* RR: duration of R-R interval from QRS annotations in milisecons (ms).
 * disPQ, disQS, and disQT: difference in ms between $\alpha_P$ and $\alpha_Q;$, $\alpha_Q$ and $\alpha_S;$; and $\alpha_S$ and $\alpha_T,$ respectively.
 
-Specifically, for the median and coeficcient of variation (Cv) of: we compute these ranges for the median and coeficcient of variation (Cv) of: FMM parameter estimates, RR segments,  acros NORM patients. 
-  Tables X to Y show In particular patient labelld as NORM, normal inus rhythm 
-Normal percentile ranges computed as [P_5], where P denotes percelies 5 and 95, respectivel 
+Normal percentile ranges for the median and coeficcient of variation (Cv) of these indices across NORM patients are given in Tables 1-5 and 6-10, respectively. Cv for angular parameters is computed as in [5]. 
 
 
 ||X5._P|X95._P|Mean_P|Sd_P|X5._Q|X95._Q|Mean_Q|Sd_Q|X5._R|X95._R|Mean_R|Sd_R|X5._S|X95._S|Mean_S|Sd_S|X5._T|X95._T|Mean_T|Sd_T
@@ -87,15 +87,11 @@ ALL_Omega|0,067|0,219|0,135|0,047|0,024|0,064|0,039|0,016|0,026|0,044|0,035|0,00
 
 [1] Rueda, C., Rodríguez-Collado, A., Fernández, I., Canedo, C., Ugarte, M. D., & Larriba, Y. (2022). A unique cardiac electrocardiographic 3D model. Toward interpretable AI diagnosis. iScience, 25(12), 105617. https://doi.org/10.1016/j.isci.2022.105617
 
-[2] Ferna´ ndez, I., Rodrı´guez-Collado, A., Larriba,
-Y., Lamela, A., Canedo, C., and Rueda, C.
-(2021). FMM: rhythmic patterns modeling by
-FMM models. R package version 0.3.0.
+[2] Fernández, I., Rodríguez-Collado, A., Larriba, Y., Lamela, A., Canedo, C., and Rueda, C. (2021). FMM: rhythmic patterns modeling by FMM models. R package version 0.3.0.
 
-[3] Ferna´ ndez, I., Rodrı´guez-Collado, A., Larriba,
-Y., Lamela, A., Canedo, C., and Rueda, C.
-(2022). FMM: an R package for modeling
-rhythmic patterns in oscillatory systems. R J.
-14, 361–380.
+[3] Fernández, I., Rodríguez-Collado, A., Larriba, Y., Lamela, A., Canedo, C., and Rueda, C. (2022). FMM: an R package for modeling rhythmic patterns in oscillatory systems. R Journal. 14, 361–380.
 
-[4] Rueda, C.,  Larriba, Y., & Lamela, A. (2021). The hidden waves in the ECG uncovered revealing a sound automated interpretation method. Scientific Reports, 11, 3724. https://doi.org/10.1038/s41598-021-82520-w
+[4] Wagner, P., Strodthoff, N., Bousseljot, RD. et al. (2020) PTB-XL, a large publicly available electrocardiography dataset. Scientific Data, 7, 154. https://doi.org/10.1038/s41597-020-0495-6
+
+[5] Rueda, C.,  Larriba, Y., & Lamela, A. (2021). The hidden waves in the ECG uncovered revealing a sound automated interpretation method. Scientific Reports, 11, 3724. https://doi.org/10.1038/s41598-021-82520-w
+
