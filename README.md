@@ -11,7 +11,7 @@ the number of leads, the length of data, or the differences between datasets lab
 <p align="center">
   <img src="https://user-images.githubusercontent.com/117477025/213187046-2fb6652a-53ed-4f6d-8e1e-ae7f91571e66.jpg" width="450" height="300" alt>
 </p>
-Figure 1: FMM parameter description. An ECG healthy heartbeat with waves decomposition and morphological parameter description
+Figure 1: Healthy ECG heartbeat with waves decomposition and morphological FMM parameter description.  $\alpha$, $\beta \in [0,2 \pi)$, $\omega \in (0,1]$  and $A \in \mathcal{R}^+.$
 
 ## How to use
 3D FMM<sub>ecg</sub> is designed to analyse multi-lead ECG fragments of any length. Data are preprocessed to  achieve reliable ECG fragments and to divide them beat by beat. Then, for each heartbeat, 3D FMM<sub>ecg</sub> provides FMM parameter estimates. For each wave, the series of parameter values, corresponding to consecutive beats, which can be summarized to get average patterns as well as the changes in the patterns over time.
