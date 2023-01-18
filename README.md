@@ -11,7 +11,8 @@ the number of leads, the length of data, or the differences between datasets lab
 <p align="center">
   <img src="https://user-images.githubusercontent.com/117477025/213187046-2fb6652a-53ed-4f6d-8e1e-ae7f91571e66.jpg" width="450" height="300" alt>
 </p>
-Figure 1: Healthy ECG heartbeat with waves decomposition and morphological FMM parameter description.  $\alpha$, $\beta \in [0,2 \pi)$, $\omega \in (0,1]$  and $A \in \mathcal{R}^+.$
+
+Figure 1: Typical ECG heartbeat. Wave decomposition and morphological FMM parameter description. $\alpha$, $\beta \in [0,2 \pi)$, $\omega \in (0,1]$  and $A \in \mathcal{R}^+.$
 
 ## How to use
 3D FMM<sub>ecg</sub> is designed to analyse multi-lead ECG fragments of any length. Data are preprocessed to  achieve reliable ECG fragments and to divide them beat by beat. Then, for each heartbeat, 3D FMM<sub>ecg</sub> provides FMM parameter estimates. For each wave, the series of parameter values, corresponding to consecutive beats, which can be summarized to get average patterns as well as the changes in the patterns over time.
@@ -31,7 +32,7 @@ This function returns the preprocessed data, QRS annotations, ECG segmentation a
 
 ### Data Analysis
 
-Prepocessed ECG fragment is divided into beats wich are subsequently analysed using 3D FMM<sub>ecg</sub> model. For computational efficiently, only the leads: I, II, V1, V2, V3, V4, V5 and V6 are considered for the analysis. The rest are linear combinations of I and II.
+Prepocessed ECG fragment is divided into beats to be subsequently analysed using 3D FMM<sub>ecg</sub> model. For computational efficiently, only the leads: I, II, V1, V2, V3, V4, V5 and V6 are considered for the analysis. The rest are linear combinations of I and II.
 
 Users must load functions to analyse ECG data and run `fitMultiFMM_ECG` function.
 
@@ -44,21 +45,21 @@ This function returns FMM wave parameter estimates across the eight leads consid
 
 ### Fitting example
 
-Run the code in `fittingExample.R` to analyse using 3D FMM<sub>ecg</sub> a single heartbeat from patient #1 in PTB-XL database (https://physionet.org/content/ptb-xl/1.0.3/) [4].
+Run the code in `fittingExample.R` to analyse using 3D FMM<sub>ecg</sub> patient #1 from PTB-XL database (https://physionet.org/content/ptb-xl/1.0.3/) [4].
 
 ## NORM patient analysis from PTB-XL. Percentile Ranges for 3D FMM<sub>ecg</sub> Indices
 
-PTB-XL is a large dataset of 21837 clinical 12-lead ECGs of 10 second length annotated by two cardiologists with diagnostic labels, based on SCP-ECG statements, and the likelihood information for the  statements [5]. PTB-XL database has been analysed using 3D FMM<sub>ecg</sub> in [1] for patients with likelihood $\geq 80$. In particular, we analysed 9055 patients from PTB-XL labelled as NORM, i.e. with normal ECGs. 
+PTB-XL is a large dataset of 21837 clinical 12-lead ECGs of 10 second length annotated by two cardiologists with diagnostic labels, based on SCP-ECG statements, and the likelihood information for the  statements [4]. PTB-XL database has been analysed using 3D FMM<sub>ecg</sub> in [1] for patients with likelihood $\geq 80$. In particular, we analysed 9055 patients from PTB-XL labelled as NORM, i.e. with normal ECGs. 
 
 The normal percentile ranges ($P_5}$, $P_{95}$) of several related 3D FMM<sub>ecg</sub> indices calculated from NORM patients are specially useful for identifyng noisy and/or pathological ECG patters, as those with values out such ranges. The FMM-based incdices for which these ranges were computed are: 
 
 * FMM parameterS: $A, \beta$ are lead-specific. $\alpha, \omega$ are equal across leads.
-* $Var_J$: measure of the relative relevance of wave J, J=P, Q, R, S, T. For a given lead, it is calculated as the variability the wave $J$ explains, see [5] for details.
+* $Var_J$: measure of the relative relevance of wave $J, J= P, Q, R, S, T$. For a given lead, it is calculated as the variability the wave $J$ explains, see [5] for details.
 * $R^2:$ measure of the accuracy of the model across leads, see [5] for details.
 * RR: duration of R-R interval from QRS annotations in milisecons (ms).
 * disPQ, disQS, and disQT: difference in ms between $\alpha_P$ and $\alpha_Q;$, $\alpha_Q$ and $\alpha_S;$; and $\alpha_S$ and $\alpha_T,$ respectively.
 
-Normal percentile ranges for the median and coeficcient of variation (Cv) of these indices across NORM patients are given in Tables 1-5 and 6-10, respectively. Cv for angular parameters is computed as in [5]. 
+Normal percentile ranges for the median (Me) and coeficcient of variation (Cv) of these indices across NORM patients in PTB-XL are given in Tables 1-5 and 6-10, respectively. Cv for angular parameters was defined in the Suplementary Material of [5]. 
 
 
 ||X5._P|X95._P|Mean_P|Sd_P|X5._Q|X95._Q|Mean_Q|Sd_Q|X5._R|X95._R|Mean_R|Sd_R|X5._S|X95._S|Mean_S|Sd_S|X5._T|X95._T|Mean_T|Sd_T
