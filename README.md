@@ -1,20 +1,37 @@
 # 3D FMM<sub>ecg</sub> 
 
-This repository provides a collection of functions, in the programming language R, to analyze multi-lead electrocardiogram (ECG) signals using the 3D FMM<sub>ecg</sub> model [1]. 
+This repository provides a collection of functions to analyze multi-lead electrocardiogram (ECG) signals using the 3D FMM<sub>ecg</sub> model [1]. The code is developed in the programming language R and requires of the R package FMM [2,3].
 
 ## Overview
 
-The 3D FMM<sub>ecg</sub> model is built under the general assumption that the electric field of the heart is a 3-dimensional process and that the 12-lead ECG signals are the projections of that process in different directions. On the one hand, the 3D FMM<sub>ecg</sub> model characerizes the morphology of the five fundamental waves, $P$, $Q$, $R$, $S$ and $T$, of ECG signals in terms of FMM parameters: $A$ (amplitude), $\alpha$ (location), $\beta$ (skewness or upward/downward peak direction) and $\omega$ (kurtosis or broadness) [2]. Indeed, there are a set of FMM parameters that are common to all the leads representing the electric field, and others that are lead-specific, representing how the signal is observed in that given direction. On the other hand, the 3D FMM<sub>ecg</sub> model accurately reproduces realistic 12-lead ECG signals from healthy or pathological hearts. Moderover, the 3D FMM<sub>ecg</sub> model is especially useful for the automatic diagnosis of cardiovascular diseases, patient follow-up, or decision-making on new therapies.
+The 3D FMM<sub>ecg</sub> model is built under the general assumption that the electric field of the heart is a 3-dimensional process and that the 12-lead ECG signals are the projections of that process in different directions. On the one hand, the 3D FMM<sub>ecg</sub> model characerizes the morphology of the five fundamental waves, $P$, $Q$, $R$, $S$ and $T$, of ECG signals in terms of FMM parameters: $A$ (amplitude), $\alpha$ (location), $\beta$ (skewness or upward/downward peak direction) and $\omega$ (kurtosis or broadness) [4]. Indeed, there are a set of FMM parameters that are common to all the leads representing the electric field, and others that are lead-specific, representing how the signal is observed in that given direction. On the other hand, the 3D FMM<sub>ecg</sub> model accurately reproduces realistic 12-lead ECG signals from healthy or pathological hearts. Moderover, the 3D FMM<sub>ecg</sub> model is especially useful for the automatic diagnosis of cardiovascular diseases, patient follow-up, or decision-making on new therapies.
 
 ## How to use
+An algorithm is
+designed to analyze 12-lead ECG fragments of any length. In the preprocessing stage, the signal is divided
+beat by beat. Then, for each beat, parameter estimates are derived. The output of the algorithm provides,
+for each wave, the series of parameter values, corresponding to consecutive beats, which can be summarized to get average patterns as well as the changes in the patterns over time
+### Preprocessing
 
-Users must load functions to preprocess ECG data and fit the 3D FMM<sub>ecg</sub> model.
+3D FMM<sub>ecg</sub> code incorporates a standard preprocessing for single or multi-lead ECG data including baseline correction, QRS detection and ECG segmentation,  see [1] for details. 
+
+Users must load functions to preprocess ECG data and run `givePreprocessing_app` function.
+
+#### `givePreprocessing_app` function arguments
+
+* dataIn: double matrix of 12 columns with raw ECG data across leads. Lead names must be provided as header. NAs are used for an unavailable leads.
+* freqHz: integer indicating indicating the sampling rate in Hertz (Hz).
+
+This function returns the preprocessed data and a matrix containg data segmentation in single hearthbeats and provide QRS annotations.
+
+### 3D FMM<sub>ecg</sub> Model Fitting
+
 ```
 path <- getwd() # Any desired path
 source(paste0(path, "/runPreprocessing_v4.1.R")) # Data preprocessing
 source(paste0(path, "/FMM_ECG3D_Codes/auxMultiFMM_ECG.R")) # Data analysis
 ```
-Preprocessing functions return preprocessed data, data segmentation in single hearthbeats and provide QRS annotations.
+
 
 ### Fitting example
 
@@ -27,10 +44,14 @@ Run the code in `fittingExample.R` which allows to fit ECG heathbeats of the pat
 * maxIter: integer indicating the maximum number of iterations of the 3D FMM backfitting algorithm.
 * parallelize: boolean. If True, a parallelized version of the fitting is performed.
 
-## NORM patients analysis from PTB-XL. 3D FMM<sub>ecg</sub> Percentile Ranges Indices
+## NORM patients analysis from PTB-XL. Percentile Ranges for 3D FMM<sub>ecg</sub> Indices
 
 PTB-XL database was analyzed using 3D FMM<sub>ecg</sub> model
-|X5._P|X95._P|Mean_P|Sd_P|X5._Q|X95._Q|Mean_Q|Sd_Q|X5._R|X95._R|Mean_R|Sd_R|X5._S|X95._S|Mean_S|Sd_S|X5._T|X95._T|Mean_T|Sd_T
+
+
+
+||X5._P|X95._P|Mean_P|Sd_P|X5._Q|X95._Q|Mean_Q|Sd_Q|X5._R|X95._R|Mean_R|Sd_R|X5._S|X95._S|Mean_S|Sd_S|X5._T|X95._T|Mean_T|Sd_T
+|---|---|---|---|---|---|---|---|---|---|---|---|---|---|---|---|---|---|---|---|---
 I_A|22,002|73,627|44,938|15,852|57,324|262,948|138,689|64,943|154,025|638,104|371,694|149,128|34,932|218,233|107,977|57,965|51,812|192,935|113,685|43,848
 II_A|30,253|109,85|66,787|24,282|46,149|254,907|132,262|66,475|183,181|722,084|420,162|166,09|42,612|254,059|128,446|66,519|63,437|220,038|130,779|48,231
 V1_A|13,868|59,663|33,515|14,337|61,708|300,483|159,988|76,569|173,454|757,599|435,613|181,521|67,354|372,525|196,125|93,977|19,53|134,936|63,486|38,089
@@ -55,4 +76,15 @@ ALL_Omega|0,067|0,219|0,135|0,047|0,024|0,064|0,039|0,016|0,026|0,044|0,035|0,00
 
 [1] Rueda, C., Rodríguez-Collado, A., Fernández, I., Canedo, C., Ugarte, M. D., & Larriba, Y. (2022). A unique cardiac electrocardiographic 3D model. Toward interpretable AI diagnosis. iScience, 25(12), 105617. https://doi.org/10.1016/j.isci.2022.105617
 
-[2] Rueda, C.,  Larriba, Y., & Lamela, A. (2021). The hidden waves in the ECG uncovered revealing a sound automated interpretation method. Scientific Reports, 11, 3724. https://doi.org/10.1038/s41598-021-82520-w
+[2] Ferna´ ndez, I., Rodrı´guez-Collado, A., Larriba,
+Y., Lamela, A., Canedo, C., and Rueda, C.
+(2021). FMM: rhythmic patterns modeling by
+FMM models. R package version 0.3.0.
+
+[3] Ferna´ ndez, I., Rodrı´guez-Collado, A., Larriba,
+Y., Lamela, A., Canedo, C., and Rueda, C.
+(2022). FMM: an R package for modeling
+rhythmic patterns in oscillatory systems. R J.
+14, 361–380.
+
+[4] Rueda, C.,  Larriba, Y., & Lamela, A. (2021). The hidden waves in the ECG uncovered revealing a sound automated interpretation method. Scientific Reports, 11, 3724. https://doi.org/10.1038/s41598-021-82520-w
