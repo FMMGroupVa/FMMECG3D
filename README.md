@@ -1,6 +1,6 @@
 # 3D FMM<sub>ecg</sub> 
 
-This repository provides a collection of functions to analyse one or multi-lead electrocardiogram (ECG) signals using the 3D FMM<sub>ecg</sub> model [1]. It is based on an efficiently mathematical formulation, based on Frequency Modulated Möbius (FMM), recently developed by our group (http://www.eio.uva.es/the-fmm-project/). 
+This repository provides a collection of functions to analyse one or multi-lead electrocardiogram (ECG) signals using the 3D FMM<sub>ecg</sub> model [1]. It relies on an efficiently mathematical methodology, based on Frequency Modulated Möbius (FMM) models, recently developed by our group (http://www.eio.uva.es/the-fmm-project/). 
 The code is developed in the programming language R and requires of the R package FMM [2,3].
 
 ## Overview
@@ -12,7 +12,7 @@ The 3D FMM<sub>ecg</sub> model is built under the general assumption that the el
   <img src="https://user-images.githubusercontent.com/117477025/213187046-2fb6652a-53ed-4f6d-8e1e-ae7f91571e66.jpg" width="450" height="300" alt>
 </p>
 
-Figure 1: Typical ECG heartbeat. Wave decomposition and morphological wave-specific FMM parameter description. $\alpha$, $\beta \in [0,2 \pi)$, $\omega \in (0,1]$  and $A \in \mathcal{R}^+.$
+Figure 1: Typical ECG heartbeat. Wave decomposition and morphological wave-specific FMM parameter description. $\alpha$, $\beta \in (0,2 \pi]$, $\omega \in (0,1]$  and $A \in \mathcal{R}^+.$
 
 ## How to use
 3D FMM<sub>ecg</sub> is designed to analyse one or multi-lead ECG fragments of any length. Data are preprocessed to  achieve reliable ECG fragments and to divide them beat by beat. Then, for each heartbeat, 3D FMM<sub>ecg</sub> provides FMM parameter estimates. For each wave, the series of parameter values, corresponding to consecutive beats, which can be summarized to get average patterns as well as the changes in the patterns over time.
@@ -51,14 +51,14 @@ Run the code in `fittingExample.R` to analyse using 3D FMM<sub>ecg</sub> patient
 
 PTB-XL is a large dataset of 21837 clinical 12-lead ECGs of 10 second length annotated by two cardiologists with diagnostic labels, based on SCP-ECG statements, and the likelihood information for the  statements [4]. PTB-XL database has been analysed using 3D FMM<sub>ecg</sub> in [1] for patients with likelihood $\geq 80$. In particular, we analysed 9055 patients from PTB-XL labelled as NORM, i.e. with non-pathological ECGs. 
 
-The normal percentile ranges ( $5th$, $95th$ ) of FMM parameters, and indices defined from them, calculated from NORM patients are specially useful for identifyng noisy and/or pathological ECG patterns, as those subjects with values out such ranges. The FMM-based indices for which these ranges were computed are: 
+The normal percentile ranges ( $5th$, $95th$ ) of FMM parameters, and indices defined from them (see below), calculated from NORM patients are specially useful for identifyng noisy and/or pathological ECG patterns, as those subjects with values out such ranges. The FMM-based indices for which these ranges were computed are: 
 
 * $Var_J$: measure of the relative relevance of wave $J$, for $J= P, Q, R, S, T$. For a given lead, it is calculated as the variability the wave $J$ explains, see [5] for details.
 * $R^2:$ measure of the accuracy of the model across leads, see [5] for details.
 * RR: duration of R-R interval from QRS annotations in milisecons (ms).
 * disPQ, disQS, and disQT: difference in ms between $\alpha_P$ and $\alpha_Q;$, $\alpha_Q$ and $\alpha_S$; and $\alpha_S$ and $\alpha_T$, respectively.
 
-Normal percentile ranges of FMM parameters and these indices across NORM patients in PTB-XL are given in Tables 1-5 for the medians (Me) and in Tables 6-10 for the coefficient of variation (Cv). Cv for angular parameters was defined in the Suplementary Material of [5]. 
+Normal percentile ranges of FMM parameters and FMM-based indices across NORM patients in PTB-XL are given in Tables 1-5 for the medians (Me) and in Tables 6-10 for the coefficient of variation (Cv). Cv for angular parameters was defined in the Suplementary Material of [5]. 
 
 
 ||$5th_P$|$95th_P$|$Mean_P$|$Sd_P$|$5th_Q$|$95th_Q$|$Mean_Q$|$Sd_Q$|$5th_R$|$95th_R$|$Mean_R$|$Sd_R$|$5th_S$|$95th_S$|$Mean_S$|$Sd_S$|$5th_T$|$95th_T$|$Mean_T$|$Sd_T$|
