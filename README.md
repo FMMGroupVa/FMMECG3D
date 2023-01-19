@@ -58,7 +58,7 @@ The normal percentile ranges ( $5th$, $95th$ ) of FMM parameters, and indices de
 * RR: duration of R-R interval from QRS annotations in milisecons (ms).
 * disPQ, disQS, and disQT: difference in ms between $\alpha_P$ and $\alpha_Q;$, $\alpha_Q$ and $\alpha_S$; and $\alpha_S$ and $\alpha_T$, respectively.
 
-Normal percentile ranges of FMM parameters and FMM-based indices across NORM patients in PTB-XL are given in Tables 1-5 for the medians (Me) and in Tables 6-10 for the coefficient of variation (Cv). Cv for angular parameters was defined in the Suplementary Material of [5]. 
+Normal percentile ranges of the medians (Me) and coefficient of variation (Cv) of FMM parameters and indices computed across NORM patients in are given in Tables 1-13. For $Var_J,$  normal percentile ranges are also provided for the Standard Deviation as, in some cases, Cv may be infacted due to the low value os variances.  Cv for angular parameters was defined in the Suplementary Material of [5]. 
 
 
 ||$5th_P$|$95th_P$|$Mean_P$|$Sd_P$|$5th_Q$|$95th_Q$|$Mean_Q$|$Sd_Q$|$5th_R$|$95th_R$|$Mean_R$|$Sd_R$|$5th_S$|$95th_S$|$Mean_S$|$Sd_S$|$5th_T$|$95th_T$|$Mean_T$|$Sd_T$|
@@ -162,6 +162,21 @@ V6|30.973|132.269|71.039|32.86|29.613|118.508|67.609|28.001|2.423|27.487|11.196|
 
 Table 7: $5th$, $95th$, Mean and standard deviation (Sd) for the Cv of $Var_J$. Subindices in the header denote waves. 
 
+
+||$5th_P$|$95th_P$|$Mean_P$|$Sd_P$|$5th_Q$|$95th_Q$|$Mean_Q$|$Sd_Q$|$5th_R$|$95th_R$|$Mean_R$|$Sd_R$|$5th_S$|$95th_S$|$Mean_S$|$Sd_S$|$5th_T$|$95th_T$|$Mean_T$|$Sd_T$|
+|---|---|---|---|---|---|---|---|---|---|---|---|---|---|---|---|---|---|---|---|---
+I|0.004|0.038|0.016|0.013|0.011|0.115|0.048|0.033|0.024|0.125|0.065|0.032|0.008|0.074|0.032|0.022|0.013|0.083|0.042|0.024
+II|0.004|0.056|0.021|0.018|0.01|0.096|0.041|0.027|0.021|0.112|0.058|0.029|0.009|0.092|0.04|0.028|0.013|0.076|0.038|0.021
+V1|0.002|0.036|0.013|0.013|0.009|0.102|0.041|0.03|0.019|0.146|0.064|0.041|0.01|0.114|0.044|0.036|0.005|0.062|0.024|0.02
+V2|0.001|0.027|0.009|0.01|0.008|0.066|0.03|0.019|0.021|0.133|0.065|0.036|0.01|0.122|0.048|0.038|0.014|0.073|0.04|0.02
+V3|0.002|0.031|0.011|0.012|0.01|0.083|0.037|0.023|0.02|0.129|0.063|0.035|0.015|0.136|0.06|0.039|0.016|0.08|0.043|0.022
+V4|0.001|0.027|0.01|0.01|0.01|0.11|0.048|0.032|0.021|0.107|0.056|0.028|0.014|0.115|0.053|0.032|0.013|0.071|0.036|0.02
+V5|0.001|0.024|0.009|0.011|0.01|0.124|0.053|0.036|0.02|0.123|0.063|0.032|0.01|0.09|0.041|0.026|0.01|0.068|0.033|0.02
+V6|0.002|0.027|0.01|0.012|0.01|0.125|0.051|0.036|0.019|0.131|0.065|0.036|0.008|0.077|0.034|0.024|0.01|0.074|0.034|0.022
+
+Table 8: $5th$, $95th$, Mean and standard deviation (Sd) for the Standard deviation of $Var_J$. Subindices in the header denote waves. 
+
+
 ||$5th$|$95th$|$Mean$|$Sd$|
 |---|---|---|---|---
 I|0.396|4.436|1.714|1.795
@@ -173,13 +188,13 @@ V4|0.208|2.17|0.923|0.904
 V5|0.196|2.251|0.913|0.998
 V6|0.217|2.547|1.033|1.63
 
-Table 8: $5th$, $95th$, Mean and standard deviation (Sd) for the Cv of $R^2$.  
+Table 9: $5th$, $95th$, Mean and standard deviation (Sd) for the Cv of $R^2$.  
 
 ||$5th$|$95th$|$Mean$|$Sd$|
 |---|---|---|---|---
 RR (ms)|0.766|7.788|3.168|2.341
 
-Table 9: $5th$, $95th$, Mean and standard deviation (Sd) for the Cv of $RR$.
+Table 10: $5th$, $95th$, Mean and standard deviation (Sd) for the Cv of $RR$.
 
 ||$5th$|$95th$|$Mean$|$Sd$|
 |---|---|---|---|---
@@ -187,7 +202,7 @@ disPQ (ms)|5|52|19|15
 disQS (ms)|2|36|17|12
 disQT (ms)|1|6|3|2
 
-Table 10: $5th$, $95th$, Mean and standard deviation (Sd) for the Cv of disPQ, disQS and disQT.
+Table 11: $5th$, $95th$, Mean and standard deviation (Sd) for the Cv of disPQ, disQS and disQT.
 
 
 ## References
