@@ -162,6 +162,33 @@ V6|30.973|132.269|71.039|32.86|29.613|118.508|67.609|28.001|2.423|27.487|11.196|
 
 Table 7: $5th$, $95th$, Mean and standard deviation (Sd) for the Cv of $Var_J$. Subindices in the header denote waves. 
 
+||$5th$|$95th$|$Mean$|$Sd$|
+|---|---|---|---|---
+I|0.396|4.436|1.714|1.795
+II|0.367|3.703|1.514|1.385
+V1|0.332|4.039|1.585|2.103
+V2|0.264|2.478|1.056|0.884
+V3|0.255|2.565|1.096|1.064
+V4|0.208|2.17|0.923|0.904
+V5|0.196|2.251|0.913|0.998
+V6|0.217|2.547|1.033|1.63
+
+Table 8: $5th$, $95th$, Mean and standard deviation (Sd) for the Cv of $R^2$.  
+
+||$5th$|$95th$|$Mean$|$Sd$|
+|---|---|---|---|---
+RR (ms)|0.766|7.788|3.168|2.341
+
+Table 9: $5th$, $95th$, Mean and standard deviation (Sd) for the Cv of $RR$.
+
+||$5th$|$95th$|$Mean$|$Sd$|
+|---|---|---|---|---
+disPQ (ms)|5|52|19|15
+disQS (ms)|2|36|17|12
+disQT (ms)|1|6|3|2
+
+Table 10: $5th$, $95th$, Mean and standard deviation (Sd) for the Cv of disPQ, disQS and disQT.
+
 
 ## References
 
