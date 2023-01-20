@@ -21,9 +21,9 @@ Figure 1: Typical ECG heartbeat. Wave decomposition and morphological wave-speci
 
 3D FMM<sub>ecg</sub> code incorporates a standard preprocessing for 1-12 ECG leads including baseline correction, QRS detection and ECG segmentation.
 
-Users must load functions to preprocess ECG data and run `givePreprocessing_app` function.
+Users must load functions to preprocess ECG data and run `givePreprocessing_git` function.
 
-#### `givePreprocessing_app` function arguments
+#### `givePreprocessing_git` function arguments
 
 * dataIn: double matrix of 12 columns with raw ECG fragment data across leads. Lead names must be provided as header. NAs are used for an unavailable leads.
 * freqHz: integer indicating indicating the sampling rate in Hertz (Hz).
