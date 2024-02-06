@@ -7,964 +7,241 @@ suppressPackageStartupMessages(require(tidyr))
 suppressWarnings(require(writexl))
 
 #### Fit of multiFMM model functions ####
-fitMultiFMM<-function(vDataMatrix, commonOmega=TRUE, nBack=5, maxIter=10,
-                      weightError=TRUE, lengthAlphaGrid = 48, lengthOmegaGrid = 24,
-                      alphaGrid = seq(0, 2*pi, length.out = lengthAlphaGrid),
-                      omegaMin = 0.0001, omegaMax = 1,
-                      omegaGrid = exp(seq(log(omegaMin), log(omegaMax), length.out = lengthOmegaGrid)),
-                      numReps = 3, parallelize = TRUE, plotWithPlotECG=FALSE,
-                      plotJustLast=FALSE, filename=NA){
-
-  nSignals<-ncol(vDataMatrix)
-
-  # Preprocessing
-  #preprocessingWave<-list()
-
-  # Is there trend? Subtract it if its the case. Furthermore, normalize signal
-  #detrendPreprocesses<-multiDetrend(vDataMatrix, filename=NA)
-  #fittedTrends<-sapply(1:nSignals, function(x) detrendPreprocesses[,x]$fittedTrend)
-  #fittedTrends<-sapply(1:nSignals, function(x) detrendPreprocesses[,x])
-
-  ## Is there trend? Subtract it if its the case. Furthermore, normalize signal
-  #for(i in 1:nSignals) {
-  #  preprocessingWave[[i]]<-list()
-  #  preprocessingWave[[i]]$trend<-fittedTrends[,i]
-  #  preprocessingWave[[i]]$scaling<- minimax(vDataMatrix[,i]-preprocessingWave[[i]]$trend)
-  #  vDataMatrix[,i] <- preprocessingWave[[i]]$scaling$minimax
-  #}
-
+fitMultiFMM <- function(vDataMatrix, nBack = 5, maxIter = 10, weightError = TRUE, 
+                        lengthAlphaGrid = 48, lengthOmegaGrid = 24, 
+                        alphaGrid = seq(0, 2*pi, length.out = lengthAlphaGrid),
+                        omegaMin = 0.0001, omegaMax = 1,
+                        omegaGrid = exp(seq(log(max(omegaMin, omegaMin)), log(1), length.out = lengthOmegaGrid)),
+                        parallelize = TRUE){
+  
+  nSignals <- ncol(vDataMatrix)
+  
   #### Preparations for the fit ####
-
+  
   # Preparation of the paralellization
-  if(typeof(parallelize)=="logical"){
-    usedApply_Cluster <- getApply(parallelize = parallelize)
-    usedApply <- usedApply_Cluster[[1]]
-
-    ## The paralellized cluster can also be previously instantiated and used
-  }else{
-    usedApply <- parallelize
-  }
-
+  usedApply_Cluster <- getApply(parallelize = parallelize)
+  usedApply <- usedApply_Cluster[[1]]
+  
   # The results are stored in:
-  paramsPerWave <- replicate(nSignals, simplify = FALSE,
+  paramsPerWave <- replicate(nSignals, simplify = FALSE, 
                              data.frame(M=double(), A=double(), Alpha=double(), Beta=double(), Omega=double()))
   fittedWaves<-lapply(1:nSignals,function(x){
     vData<-vDataMatrix[,x]; vData<-vData[!is.na(vData)];
     return(array(0,c(length(vData),nBack)))})
-
+  
   # The MSE must be balanced in the fit of multiple signals
   errorWeights<-rep(1,nSignals); totalMSE<-rep(Inf, maxIter)
-
+  
   # Backfitting algorithm: iteration
   currentBack<-1; continueBackfitting<-TRUE
   cat(paste("Backfitting: ",sep=""))
-
+  
   while(continueBackfitting) {
     cat(paste(currentBack," ",sep=""))
     fmmObjectList<-list()
     paramsPerWave <- replicate(nSignals, simplify = FALSE,
                                data.frame(M=double(), A=double(),
                                           Alpha=double(), Beta=double(), Omega=double()))
-
     # Backfitting algorithm: component
     for(j in 1:nBack){
-      #### First Step: determine optimal common parameters (just alpha or alpha and omega) ####
-      optimalParams <- optimizeCommonParameters(commonOmega = commonOmega, vDataMatrix = vDataMatrix,
-                                                fittedWaves = fittedWaves, currentComp = j,
-                                                alphaGrid = alphaGrid, omegaGrid = omegaGrid, omegaMax = omegaMax,
-                                                errorWeights = errorWeights, usedApply = usedApply)
-
+      #### First Step: determine optimal common parameters (alpha and omega) ####
+      optimalParams <- optimizeAlphaOmega(vDataMatrix = vDataMatrix, fittedWaves = fittedWaves,
+                                          currentComp = j, alphaGrid = alphaGrid,
+                                          omegaGrid = omegaGrid, omegaMax = omegaMax,
+                                          errorWeights = errorWeights, usedApply = usedApply)
+      
       #### Second Step: fit single FMM wave in each signal with common parameters ####
       for(signalIndex in 1:nSignals){
         vData<-vDataMatrix[,signalIndex]; vData<-vData[!is.na(vData)]; nObs<-length(vData)
         vData<-vData - apply(as.matrix(fittedWaves[[signalIndex]][,-j]), 1, sum)
-        fmmObjectList[[signalIndex]]<-optimizeOtherParameters(commonOmega = commonOmega,
-                                                              vData = vData, fixedParams = optimalParams,
-                                                              usedApply = usedApply)
+        fmmObjectList[[signalIndex]]<-optimizeOtherParameters(vData = vData, fixedParams = optimalParams)
+        
         fittedWaves[[signalIndex]][,j]<-getFittedValues(fmmObjectList[[signalIndex]])
       }
-
+      
       #### Get FMM parameters per wave ####
       params<-data.frame("M"=sapply(fmmObjectList,getM),"A"=sapply(fmmObjectList,getA),"Alpha"=sapply(fmmObjectList,getAlpha),
                          "Beta"=sapply(fmmObjectList,getBeta),"Omega"=sapply(fmmObjectList,getOmega), "Var"=rep(NA,nSignals))
       paramsPerWave<-lapply(1:nSignals, function(x) rbind(paramsPerWave[[x]], params[x,]))
-      ## Recalculate As and Ms
-      paramsPerWave<-lapply(1:nSignals, function(x) recalculateMA(vDatai=vDataMatrix[,x], currentBackResults=paramsPerWave[[x]]))
-
+      paramsPerWave<-lapply(1:nSignals, function(x) recalculateMA(vDatai=vDataMatrix[,x], paramsPerSignal=paramsPerWave[[x]]))
       #### Error is weighted across signals ####
-      sigma<-sapply(1:nSignals, function(x){sum((vDataMatrix[,x]-apply(as.matrix(fittedWaves[[x]]),
-                                                                       1, sum))^2)/(nObs-1)})
+      sigma<-sapply(1:nSignals, function(x){sum((vDataMatrix[,x]-apply(as.matrix(fittedWaves[[x]]), 1, sum))^2)/(nObs-1)})
       if(weightError) errorWeights<-1/sigma
       else errorWeights<-rep(1,nSignals)
     }
-    totalMSE[currentBack]<-sum(sigma)
-
-    #### Plot ####
-    if(!plotJustLast){
-      if(!plotWithPlotECG){
-        plotMultiFMM(vDatai=vDataMatrix, fittedWaves = fittedWaves, currentBack = currentBack,
-                     leadNames=colnames(vDataMatrix), currentBackResults = paramsPerWave,
-                     plotToFile = !is.na(filename), unassigned=TRUE, filename = filename)
-      }else{
-        plotMultiFMM_ECG(vDataMatrix=vDataMatrix, fittedWaves = fittedWaves, leadNames = colnames(vDataMatrix), #leadNames = gsub("^.{0,4}", "", colnames(vDataMatrix)),
-                         currentBack = currentBack, paramsPerLead = paramsPerWave, unassigned = TRUE, filename = filename, plotToFile = TRUE)
-      }
-    }
-
+    totalMSE[currentBack]<-sum(sapply(1:nSignals, function(x){sum((vDataMatrix[,x]-apply(as.matrix(fittedWaves[[x]]), 1, sum))^2)}))
+    
     # Check if backfitting should stop
     stopCondition1<-currentBack>=maxIter
-    stopCondition2<-ifelse(currentBack>1,totalMSE[currentBack]>totalMSE[currentBack-1], FALSE)
+    stopCondition2<-ifelse(currentBack>1, totalMSE[currentBack]>totalMSE[currentBack-1], FALSE)
     if(stopCondition1 | stopCondition2){
-      stopCriteria<-ifelse(stopCondition1, "Maximum Iterations",
-                           "Minimum MSE")
-      cat(paste("  Stop: ",stopCriteria,"\n",sep=""))
+      stopCriteria<-ifelse(stopCondition1, "Maximum Iterations", "Minimum MSE")
+      cat(paste("  Stop: ", stopCriteria, "\n", sep=""))
       continueBackfitting<-FALSE
-
-      #### Plot, if plotJustLast ####
-      if(plotJustLast){
-        if(!plotWithPlotECG){
-          plotMultiFMM(vDatai=vDataMatrix, fittedWaves = fittedWaves, currentBack = currentBack,
-                       leadNames=colnames(vDataMatrix), currentBackResults = paramsPerWave,
-                       plotToFile = !is.na(filename), unassigned=TRUE, filename = filename)
-        }else{
-          plotMultiFMM_ECG(vDataMatrix=vDataMatrix, fittedWaves = fittedWaves, leadNames = colnames(vDataMatrix), #leadNames = gsub("^.{0,4}", "", colnames(vDataMatrix)),
-                           currentBack = currentBack, paramsPerLead = paramsPerWave, unassigned = TRUE, filename = filename, plotToFile = TRUE)
-        }
-      }
-
     }else{
       currentBack<-currentBack+1
     }
   }
 
-  # Unname waves
+  # Unname waves and stop parallelized cluster
   for(i in 1:nSignals) rownames(paramsPerWave[[i]])<-1:nBack
-
-  # If the cluster has been instantiated in the function, it must be stopped
-  if(typeof(parallelize)=="logical"){
-    cluster <- usedApply_Cluster[[2]]
-    if(!is.null(cluster)) parallel::stopCluster(cluster)
-  }
+  cluster <- usedApply_Cluster[[2]]
+  if(!is.null(cluster)) parallel::stopCluster(cluster)
 
   #### Return results ####
   return(paramsPerWave)
 }
 
+
 #### Internal multiFMM functions ####
 ## MultiFMM, first step: optimize common parameters
-optimizeCommonParameters<-function(commonOmega, vDataMatrix, fittedWaves, currentComp,
-                                   alphaGrid, omegaGrid, omegaMax, errorWeights, usedApply){
-  if(commonOmega){
-    optimalParameters<-optimizeAlphaOmega(vDataMatrix = vDataMatrix, fittedWaves = fittedWaves,
-                                          currentComp = currentComp, alphaGrid = alphaGrid,
-                                          omegaGrid = omegaGrid, omegaMax = omegaMax,
-                                          errorWeights = errorWeights, usedApply = usedApply)
-  }else{
-    optimalParameters<-optimizeAlpha(vDataMatrix = vDataMatrix, fittedWaves = fittedWaves,
-                                     currentComp = currentComp, alphaGrid = alphaGrid,
-                                     omegaGrid = omegaGrid, omegaMax = omegaMax,
-                                     errorWeights = errorWeights, usedApply = usedApply)
-  }
-  return(optimalParameters)
+
+step1FMM3D <- function(alphaOmegaParameters, vData, timePoints, sigmas = rep(1, ncol(vData))) {
+  alpha <- as.numeric(alphaOmegaParameters[1])
+  omega <- as.numeric(alphaOmegaParameters[2])
+  tStar <- alpha + 2*atan2(omega*sin((timePoints-alpha)/2), cos((timePoints-alpha)/2))
+  
+  fittedValues <- apply(vData, 2, function(x){
+    dM <- cbind(rep(1, length(x)), cos(tStar), sin(tStar))
+    mDeltaGamma <- solve(crossprod(dM), t(dM)%*%x)
+    yFit <- mDeltaGamma[1] + mDeltaGamma[2]*cos(tStar) + mDeltaGamma[3]*sin(tStar)
+    return(yFit)
+  })
+  residuales <- (vData - fittedValues)^2
+  logL <- -sum(t(sigmas^2*t(residuales))/2)
+  return(c(alpha, omega, logL))
 }
 
-step2_commonAlpha <- function(initialParams, vDataMatrix, omegaMax){
-
-  initialAlpha<-initialParams[1]
-  nSignals<-ncol(vDataMatrix); residualSS<-0
-  rest1<-TRUE; rest2<-TRUE; rest3<-TRUE; rest4<-TRUE
-
-  for(i in 1:nSignals){
-    parameters<-initialParams[2:5+((i-1)*4)]
-    vData<-vDataMatrix[,i]; vData<-vData[!is.na(vData)]; nObs<-length(vData)
-    timePoints<-seqTimes(nObs)
-
-    # FMM model and residual sum of squares
-    modelFMM <- parameters[1] + parameters[2] *
-      cos(parameters[3]+2*atan2(parameters[4]*sin((timePoints - initialAlpha)/2),
-                                cos((timePoints - initialAlpha)/2)))
-    residualSS <- residualSS+sum((modelFMM - vData)^2)/nObs
-    sigma <- sqrt(residualSS*nObs/(nObs - 5))
-
-    # When amplitude condition is valid, it returns RSS
-    # else it returns infinite.
-    # amplitudeUpperBound <- parameters[1] + parameters[2]
-    # amplitudeLowerBound <- parameters[1] - parameters[2]
-    # rest1 <- amplitudeUpperBound <= max(vData) + 1.96*sigma
-    # if(!rest1){
-    #   warning("step2FMM_fixedAlphaOmega - rest1 not met: amplitudeUpperBound > max(x(t))")
-    #   rest1<-!rest1
-    # }
-    # rest2 <- amplitudeLowerBound >= min(vData) - 1.96*sigma
-    # if(!rest2){
-    #   warning("step2FMM_fixedAlphaOmega - rest2 not met: amplitudeLowerBound < max(x(t))")
-    #   rest2<-!rest2
-    # }
-
-    # Other integrity conditions that must be met
-    if(parameters[2] < 0) rest3<-FALSE  # A > 0
-    if(parameters[4] < 0  |  parameters[4] > omegaMax) rest4<-FALSE # omega in (0, omegaMax]
-  }
-
-  #if(rest1 & rest2 & rest3 & rest4) # Disabled rest1 and rest2
-  if(rest3 & rest4)
-    return(residualSS)
-  else
-    return(Inf)
-}
-
-optimizeAlpha <- function(vDataMatrix, fittedWaves, currentComp,
-                          alphaGrid, omegaGrid, errorWeights, usedApply,
-                          omegaMax = 0.7){
-  nSignals<-ncol(vDataMatrix)
-  step1OutputNames <- c("M","A","alpha","beta","omega","RSS")
-  rssMatrix<-matrix(NA, nrow = length(alphaGrid), ncol = (2*nSignals)+1,
-                    dimnames = list(NULL,c("alpha",
-                                           paste(rep(c("RSS","omega"),each=nSignals),
-                                                 rep(1:nSignals,2),
-                                                 sep = ""))))
-  rssMatrix[,1]<-alphaGrid
-  bestParamSets<-list()
-  grid <- expand.grid(alphaGrid, omegaGrid)
-
-  #### Initial estimation based on step1 ####
-  residualsMatrix<-vDataMatrix
-
-  for(signalIndex in 1:nSignals){
-    vData<-vDataMatrix[,signalIndex]; vData<-vData[!is.na(vData)]; nObs<-length(vData)
-
-    # The previously calculated components are substrated
-    residualsMatrix[,signalIndex]<-vData - apply(as.matrix(fittedWaves[[signalIndex]][,-currentComp]), 1, sum)
-
-    step1 <- usedApply(FUN = FMM:::step1FMM, X = grid, vData = residualsMatrix[,signalIndex],
-                       timePoints = seqTimes(nObs=nObs))
-    colnames(step1) <- step1OutputNames
-    minRssPerAlpha<-aggregate(RSS ~ alpha, data = step1, FUN = min)
-    rssMatrix[,signalIndex+1]<-errorWeights[signalIndex]*minRssPerAlpha$RSS
-    bestParamSets[[signalIndex]]<-merge(minRssPerAlpha, step1, by = c("alpha", "RSS"))
-    rssMatrix[,paste("omega",signalIndex,sep = "")]<-bestParamSets[[signalIndex]]$omega
-  }
-
-  # Solutions with big omegas are not permitted
-  notValidIndex<-apply(rssMatrix[,paste("omega",1:nSignals,sep = "")], 1,
-                       function(x) any(x>omegaMax))
-  if(all(notValidIndex)){
-    notValidIndex<-rep(FALSE,nrow(grid))
-  }
-  rssMatrix[notValidIndex,"RSS1"]<-Inf
-
-  # The best alpha is the one that fulfills:
-  bestAlphaIndex<-which.min(apply(rssMatrix[,-1],1,mean))
-
-  # The rest of the parameters, for each signal, are:
-  initialParams<-unlist(sapply(bestParamSets, function(x) x[bestAlphaIndex,]))
-  names(initialParams)<-paste(rep(c("alpha","RSS","M","A","beta","omega"),
-                                  times=nSignals),rep(1:nSignals,each=6))
-  # Reorder values, just a single alpha
-  orderedIndexes<-c(1, as.numeric(sapply(1:nSignals, function(x) c(3:4,5:6)+((x-1)*6))))
-  initialParams<-initialParams[orderedIndexes]
-
-  #### Nelder-Mead optimization of the parameters ####
-  nelderMead <- optim(par = initialParams, fn = step2_commonAlpha,
-                      vDataMatrix = residualsMatrix, omegaMax = omegaMax)
-
-  return(nelderMead$par[1]) # Best alpha
-}
-
-step2_commonAlphaOmega <- function(initialParams, vDataMatrix, omegaMax){
-
-  initialAlpha<-initialParams[1]; initialOmega<-initialParams[2]
-  nSignals<-ncol(vDataMatrix); residualSS<-0
-  rest1<-TRUE; rest2<-TRUE; rest3<-TRUE; rest4<-TRUE
-
-  for(i in 1:nSignals){
-    parameters<-initialParams[3:5+((i-1)*3)]
-    vData<-vDataMatrix[,i]; vData<-vData[!is.na(vData)]; nObs<-length(vData)
-    timePoints<-seqTimes(nObs)
-
-    # FMM model and residual sum of squares
-    modelFMM <- parameters[1] + parameters[2] *
-      cos(parameters[3]+2*atan2(initialOmega*sin((timePoints - initialAlpha)/2),
-                                cos((timePoints - initialAlpha)/2)))
-    residualSS <- residualSS+sum((modelFMM - vData)^2)/nObs
-    sigma <- sqrt(residualSS*nObs/(nObs - 5))
-
-    # When amplitude condition is valid, it returns RSS
-    # else it returns infinite.
-    # amplitudeUpperBound <- parameters[1] + parameters[2]
-    # amplitudeLowerBound <- parameters[1] - parameters[2]
-    # rest1 <- amplitudeUpperBound <= max(vData) + 1.96*sigma
-    # if(!rest1){
-    #   warning("step2FMM_fixedAlphaOmega - rest1 not met: amplitudeUpperBound > max(x(t))")
-    #   rest1<-!rest1
-    # }
-    # rest2 <- amplitudeLowerBound >= min(vData) - 1.96*sigma
-    # if(!rest2){
-    #   warning("step2FMM_fixedAlphaOmega - rest2 not met: amplitudeLowerBound < max(x(t))")
-    #   rest2<-!rest2
-    # }
-
-    # Other integrity conditions that must be met
-    if(parameters[2] < 0) rest3<-FALSE  # A > 0
-    if(initialOmega < 0  |  initialOmega > omegaMax) rest4<-FALSE # omega in (0, omegaMax]
-  }
-
-  #if(rest1 & rest2 & rest3 & rest4)  # Disabled rest1 and rest2
-  if(rest3 & rest4)  # Disabled rest1 and rest2
-    return(residualSS)
-  else
-    return(Inf)
+logLik3DFMM1 <- function(alphaOmegaParameters, vData, timePoints, sigmas = rep(1, ncol(vData))) {
+  alpha <- as.numeric(alphaOmegaParameters[1])
+  omega <- as.numeric(alphaOmegaParameters[2])
+  tStar <- alpha + 2*atan2(omega*sin((timePoints-alpha)/2), cos((timePoints-alpha)/2))
+  fittedValues <- apply(vData, 2, function(x){
+    dM <- cbind(rep(1, length(x)), cos(tStar), sin(tStar))
+    mDeltaGamma <- solve(t(dM)%*%dM)%*%t(dM)%*%x
+    yFit <- mDeltaGamma[1] + mDeltaGamma[2]*cos(tStar) + mDeltaGamma[3]*sin(tStar)
+    return(yFit)
+  })
+  residuales <- (vData - fittedValues)^2
+  logL <- -sum(t(sigmas^2*t(residuales))/2) # Cada columna por su sigma^2
+  return(logL)
 }
 
 optimizeAlphaOmega<-function(vDataMatrix, fittedWaves, currentComp,
                              alphaGrid, omegaGrid, errorWeights, usedApply,
                              omegaMax = 0.7){
-  nSignals<-ncol(vDataMatrix)
-  step1OutputNames <- c("M","A","alpha","beta","omega","RSS")
+  nObs<-nrow(vDataMatrix)
+  nSignals <- ncol(vDataMatrix)
+  timePoints = seqTimes(nObs)
+  
   grid <- expand.grid(alphaGrid, omegaGrid)
-  rssMatrix<-matrix(NA, nrow = nrow(grid), ncol = (nSignals)+2,
-                    dimnames = list(NULL,c("alpha", "omega",
-                                           paste("RSS", 1:nSignals, sep = ""))))
+  residualsMatrix <- vDataMatrix
+  
+  rssMatrix<-matrix(NA, nrow = nrow(grid), ncol = (nSignals)+2)
   rssMatrix[,1]<-grid[,1]; rssMatrix[,2]<-grid[,2]
-
-  #### Initial estimation based on step1 ####
-  residualsMatrix<-vDataMatrix
-  bestParamSets<-list()
+  
   for(signalIndex in 1:nSignals){
-    vData<-vDataMatrix[,signalIndex]; vData<-vData[!is.na(vData)]; nObs<-length(vData)
-    residualsMatrix[,signalIndex]<-vData - apply(as.matrix(fittedWaves[[signalIndex]][,-currentComp]), 1, sum)
-
+    vData<-vDataMatrix[,signalIndex]
+    residualsMatrix[,signalIndex] <- vData - apply(as.matrix(fittedWaves[[signalIndex]][,-currentComp]), 1, sum)
+    
     step1 <- usedApply(FUN = FMM:::step1FMM, X = grid, vData = residualsMatrix[,signalIndex],
-                       timePoints = seqTimes(nObs=nObs))
-    colnames(step1) <- step1OutputNames
-    rssMatrix[,signalIndex+2]<-errorWeights[signalIndex]*step1[,"RSS"]
-    bestParamSets[[signalIndex]]<-step1
+                       timePoints = timePoints)
+    rssMatrix[,signalIndex+2] <- errorWeights[signalIndex]*step1[,6]
   }
-
-  # Solutions with big omegas are not permitted
-  notValidIndex<-rssMatrix[,"omega"]>omegaMax
-  if(all(notValidIndex)){
-    notValidIndex<-rep(FALSE,nrow(grid))
-  }
-  rssMatrix[notValidIndex,"RSS1"]<-Inf
-
-  # The best alpha and omega is the index that fulfills:
-  bestParamsIndex<-which.min(apply(rssMatrix[,-c(1:2)],1,mean))
-
-  # The rest of the parameters, for each signal, are:
-  initialParams<-as.numeric(unlist(sapply(bestParamSets, function(x) x[bestParamsIndex,])))
-  names(initialParams)<-paste(rep(c("M","A","alpha","beta","omega","RSS"),
-                                  times=nSignals),rep(1:nSignals,each=6))
-  # Reorder values, just single alpha and omega
-  orderedIndexes<-c(3, 5, as.numeric(sapply(1:nSignals, function(x) c(1:2,4)+((x-1)*6))))
-  initialParams<-initialParams[orderedIndexes]
-
-  #### Nelder-Mead optimization of the parameters ####
-  nelderMead <- optim(par = initialParams, fn = step2_commonAlphaOmega,
-                      vDataMatrix = residualsMatrix, omegaMax = omegaMax)
-
-  return(nelderMead$par[1:2]) # Best alpha and omega
-
-
+  
+  bestParamsIndex <- which.min(apply(rssMatrix[,-c(1:2)],1,mean))
+  initialParams <- as.numeric(rssMatrix[bestParamsIndex, c(1:2)])
+  
+  nelderMead <- optim(par = initialParams, fn = logLik3DFMM1, 
+                      vData = residualsMatrix, timePoints = timePoints, sigmas = 1/errorWeights, 
+                      method = "L-BFGS-B", control = list(fnscale = -1), lower = c(0, omegaGrid[1]), upper = c(2*pi, 1))
+  
+  return(nelderMead$par) # Best alpha and omega
+  
 }
 
 ## MultiFMM, second step: determine non-common parameters
-optimizeOtherParameters<-function(commonOmega, vData, fixedParams, timePoints = seqTimes(length(vData)),
-                                  lengthOmegaGrid = 24, omegaMin = 0.0001, omegaMax = 1,
-                                  omegaGrid = exp(seq(log(omegaMin), log(omegaMax),
-                                                      length.out = lengthOmegaGrid)),
-                                  numReps = 3, usedApply = getApply(FALSE)[[1]]){
-
-  if(commonOmega){
-    fittedFMM<-fitFMM_unit_fixedAlphaOmega(vData = vData, fixedParams = fixedParams,
-                                           timePoints = timePoints, usedApply = usedApply)
-  }else{
-    fittedFMM<-fitFMM_unit_fixedAlpha(vData = vData, fixedParams = fixedParams,
-                                      timePoints = timePoints, lengthOmegaGrid = lengthOmegaGrid,
-                                      omegaMin = omegaMin, omegaMax = omegaMax, omegaGrid = omegaGrid,
-                                      numReps = numReps, usedApply = usedApply)
-  }
-  return(fittedFMM)
-}
-
-step2FMM_fixedAlpha <- function(parameters, vData, timePoints, omegaMax, fixedAlpha){
-
-  nObs <- length(timePoints)
-
-  # FMM model and residual sum of squares
-  modelFMM <- parameters[1] + parameters[2] *
-    cos(parameters[4]+2*atan2(parameters[5]*sin((timePoints - fixedAlpha)/2),
-                              cos((timePoints - fixedAlpha)/2)))
-  residualSS <- sum((modelFMM - vData)^2)/nObs
-  sigma <- sqrt(residualSS*nObs/(nObs - 5))
-
-  # When amplitude condition is valid, it returns RSS
-  # else it returns infinite.
-  # amplitudeUpperBound <- parameters[1] + parameters[2]
-  # amplitudeLowerBound <- parameters[1] - parameters[2]
-  # rest1 <- amplitudeUpperBound <= max(vData) + 1.96*sigma
-  # if(!rest1){
-  #   warning("step2FMM_fixedAlpha - rest1 not met: amplitudeUpperBound > max(x(t))")
-  #   rest1<-!rest1
-  # }
-  # rest2 <- amplitudeLowerBound >= min(vData) - 1.96*sigma
-  # if(!rest2){
-  #   warning("step2FMM_fixedAlpha - rest 1 not met: amplitudeLowerBound < max(x(t))")
-  #   rest2<-!rest2
-  # }
-
-  # Other integrity conditions that must be met
-  rest3 <- parameters[2] > 0  # A > 0
-  rest4 <- parameters[5] > 0  &  parameters[5] <= omegaMax # omega in (0, omegaMax]
-
-  #if(rest1 & rest2 & rest3 & rest4)  # Disabled rest1 and rest2
-  if(rest3 & rest4)
-    return(residualSS)
-  else
-    return(Inf)
-}
-
-fitFMM_unit_fixedAlpha <- function(vData, fixedParams, timePoints = seqTimes(length(vData)),
-                                   lengthOmegaGrid = 24, omegaMin = 0.0001, omegaMax = 1,
-                                   omegaGrid = exp(seq(log(omegaMin), log(omegaMax),
-                                                       length.out = lengthOmegaGrid)),
-                                   numReps = 3, usedApply = getApply(FALSE)[[1]]){
-
-  nObs <- length(vData)
-  grid <- expand.grid(fixedParams, omegaGrid)
-  step1OutputNames <- c("M","A","alpha","beta","omega","RSS")
-
-  ## Step 1: initial values of M, A, alpha, beta and omega. Parameters alpha and
-  # omega are initially fixed and cosinor model is used to calculate the rest of the parameters.
-  # step1FMM function is used to make this estimate.
-  # For faster estimates, parallelized and rcpp implementations are available
-  step1 <- usedApply(FUN = FMM:::step1FMM, X = grid, vData = vData,
-                     timePoints = timePoints)
-  colnames(step1) <- step1OutputNames
-
-
-  # We find the optimal initial parameters,
-  # minimizing Residual Sum of Squared with several stability conditions.
-  # We use bestStep1 internal function
-  bestPar <- FMM:::bestStep1(vData, step1)
-
-  ## Step 2: Nelder-Mead optimization. 'step2FMM' function is used.
-  nelderMead <- optim(par = bestPar[1:5], fn = step2FMM_fixedAlpha, vData = vData,
-                      timePoints = timePoints, omegaMax = omegaMax, fixedAlpha=fixedParams)
-  parFinal <- nelderMead$par
-  parFinal[3]<-fixedParams
-  SSE <- nelderMead$value*nObs
-
-  # alpha and beta between 0 and 2pi
-  parFinal[3] <- parFinal[3]%%(2*pi)
-  parFinal[4] <- parFinal[4]%%(2*pi)
-
-  # the grid search is repeated numReps
-  numReps <- numReps - 1
-  while(numReps > 0){
-
-    # new grid for omega between 0 and omegaMax
-    nOmegaGrid <- length(omegaGrid)
-    amplitudeOmegaGrid <- 1.5*mean(diff(omegaGrid))
-    omegaGrid <- seq(max(omegaMin, parFinal[5] - amplitudeOmegaGrid),
-                     min(omegaMax, parFinal[5] + amplitudeOmegaGrid),
-                     length.out = nOmegaGrid)
-    grid <- as.matrix(expand.grid(fixedParams,omegaGrid))
-
-    # Step 1: initial parameters
-    step1 <- usedApply(FUN = FMM:::step1FMM, X = grid, vData = vData,
-                       timePoints = timePoints)
-    colnames(step1) <- step1OutputNames
-    prevBestPar <- bestPar
-    bestPar <- FMM:::bestStep1(vData,step1)
-
-    # None satisfies the conditions
-    if(is.null(bestPar)){
-      bestPar <- prevBestPar
-      numReps <- 0
-      warning("FMM model may be no appropiate")
-    }
-
-    ## Step 2: Nelder-Mead optimization
-    nelderMead <- optim(par = bestPar[1:5], fn = step2FMM_fixedAlpha, vData = vData,
-                        timePoints = timePoints, omegaMax = omegaMax, fixedAlpha=fixedParams)
-    parFinal <- nelderMead$par
-    parFinal[3]<-fixedParams
-
-    # alpha and beta between 0 and 2pi
-    parFinal[3] <- parFinal[3] %% (2*pi)
-    parFinal[4] <- parFinal[4] %% (2*pi)
-
-    numReps <- numReps - 1
-  }
-
-  names(parFinal) <- step1OutputNames[-6]
-
-  # Returns an object of class FMM.
-  fittedFMMvalues <- parFinal["M"] + parFinal["A"]*cos(parFinal["beta"] +
-                                                         2*atan(parFinal["omega"]*tan((timePoints-parFinal["alpha"])/2)))
-  SSE <- sum((fittedFMMvalues-vData)^2)
-
-  fmmObject<-FMM:::FMM(
-    M = parFinal[[1]],
-    A = parFinal[[2]],
-    alpha = parFinal[[3]],
-    beta = parFinal[[4]],
-    omega = parFinal[[5]],
+optimizeOtherParameters <- function(vData, fixedParams, timePoints = seqTimes(length(vData))){
+  
+  alpha <- as.numeric(fixedParams[1])
+  omega <- as.numeric(fixedParams[2])
+  tStar <- alpha + 2*atan2(omega*sin((timePoints-alpha)/2), cos((timePoints-alpha)/2))
+  
+  dM <- cbind(rep(1, length(tStar)), cos(tStar), sin(tStar))
+  mDeltaGamma <- solve(t(dM)%*%dM)%*%t(dM)%*%vData
+  M <- mDeltaGamma[1]
+  delta <- mDeltaGamma[2]
+  gamma <- mDeltaGamma[3]
+  
+  fittedFMMvalues <- mDeltaGamma[1] + mDeltaGamma[2]*cos(tStar) + mDeltaGamma[3]*sin(tStar)
+  SSE <- sum((vData-fittedFMMvalues)^2)
+  
+  fmmObject<-FMM(
+    M = mDeltaGamma[1],
+    A = sqrt(delta^2+gamma^2),
+    alpha = alpha,
+    beta = atan2(-gamma, delta) + alpha,
+    omega = omega,
     timePoints = timePoints,
     summarizedData = vData,
     fittedValues = fittedFMMvalues,
     SSE = SSE,
-    R2 = FMM:::PV(vData, fittedFMMvalues),
+    R2 = PV(vData, fittedFMMvalues),
     nIter = 0
   )
-
+  
   fmmObject@nPeriods<-1
   fmmObject@data<-vData
-
+  
   return(fmmObject)
 }
 
 step2FMM_fixedAlphaOmega <- function(parameters, vData, timePoints, fixedAlpha, fixedOmega){
-
   nObs <- length(timePoints)
-
-  # FMM model and residual sum of squares
   modelFMM <- parameters[1] + parameters[2] *
     cos(parameters[4]+2*atan2(fixedOmega*sin((timePoints - fixedAlpha)/2),
                               cos((timePoints - fixedAlpha)/2)))
   residualSS <- sum((modelFMM - vData)^2)/nObs
-  sigma <- sqrt(residualSS*nObs/(nObs - 5))
-
-  # When amplitude condition is valid, it returns RSS
-  # else it returns infinite.
-  # amplitudeUpperBound <- parameters[1] + parameters[2]
-  # amplitudeLowerBound <- parameters[1] - parameters[2]
-  # rest1 <- amplitudeUpperBound <= max(vData) + 1.96*sigma
-  # if(!rest1){
-  #   warning("step2FMM_fixedAlphaOmega - rest1 not met: amplitudeUpperBound > max(x(t))")
-  #   rest1<-!rest1
-  # }
-  # rest2 <- amplitudeLowerBound >= min(vData) - 1.96*sigma
-  # if(!rest2){
-  #   warning("step2FMM_fixedAlphaOmega - rest 1 not met: amplitudeLowerBound < max(x(t))")
-  #   rest2<-!rest2
-  # }
-
-  # Other integrity conditions that must be met
   rest3 <- parameters[2] > 0  # A > 0
-  #rest4 <- parameters[5] > 0  &  parameters[5] <= omegaMax Omega param. should be OK
-  #if(rest1 & rest2 & rest3 & rest4)  # Disabled rest1, rest2 and rest4
   if(rest3)
     return(residualSS)
   else
     return(Inf)
 }
 
-fitFMM_unit_fixedAlphaOmega <- function(vData, fixedParams, timePoints = seqTimes(length(vData)),
-                                        usedApply = getApply(FALSE)[[1]]){
-
-  step1OutputNames <- c("M","A","alpha","beta","omega","RSS")
-
-  ## Step 1: initial values of M, A, alpha, beta and omega. Parameters alpha and
-  # omega are fixed.
-  step1 <- FMM:::step1FMM(unname(fixedParams), vData = vData, timePoints = timePoints)
-  names(step1) <- step1OutputNames
-
-  ## Step 2: Nelder-Mead optimization. 'step2FMM' function is used.
-  nelderMead <- optim(par = step1[1:5], fn = step2FMM_fixedAlphaOmega, vData = vData,
-                      timePoints = timePoints, fixedAlpha=fixedParams[1], fixedOmega = fixedParams[2])
-  parFinal <- nelderMead$par
-
-  # Some times Nelder-Mead moves values not used in the function evaluated
-  parFinal[3]<-fixedParams[1]; parFinal[5]<-fixedParams[2]
-
-  # alpha and beta between 0 and 2pi
-  parFinal[3] <- parFinal[3]%%(2*pi)
-  parFinal[4] <- parFinal[4]%%(2*pi)
-  names(parFinal) <- step1OutputNames[-6]
-
-  # Returns an object of class FMM.
-  fittedFMMvalues <- parFinal["M"] + parFinal["A"]*cos(parFinal["beta"] +
-                                                         2*atan(parFinal["omega"]*tan((timePoints-parFinal["alpha"])/2)))
-  SSE <- sum((fittedFMMvalues-vData)^2)
-
-  fmmObject<-FMM:::FMM(
-    M = parFinal[[1]],
-    A = parFinal[[2]],
-    alpha = parFinal[[3]],
-    beta = parFinal[[4]],
-    omega = parFinal[[5]],
-    timePoints = timePoints,
-    summarizedData = vData,
-    fittedValues = fittedFMMvalues,
-    SSE = SSE,
-    R2 = FMM:::PV(vData, fittedFMMvalues),
-    nIter = 0
-  )
-
-  fmmObject@nPeriods<-1
-  fmmObject@data<-vData
-
-  return(fmmObject)
-}
-
-
-#### Data preprocessing functions ####
-#### Preprocessing functions ####
-
-minimax<-function(y, minY=NULL, maxY=NULL){
-  if(is.null(minY) | is.null(maxY))  minY<-min(y, na.rm = TRUE); maxY<-max(y, na.rm = TRUE)
-  minimaxList<-list("minY"=minY, "maxY"=maxY,
-                    "minimax"=-1+2*(y-minY)/(maxY-minY))
-  return(minimaxList)
-}
-
-revMinimax<-function(values, minY, maxY){
-  return(((maxY-minY)*(values+1)/2)+minY)
-}
-
-
 #### Other multiFMM useful functions ####
-recalculateMA<-function(vDatai, currentBackResults){
-
+recalculateMA<-function(vDatai, paramsPerSignal){
+  
   nObs<-length(vDatai)
-
+  
   ## Extract Params. and calculate cosPhi
-  alpha<-currentBackResults$Alpha; maxComp<-length(alpha)
-
-  ## Have the waves been assigned?
-  if("R" %in% rownames(currentBackResults)){
-    assignedWaves<-TRUE
-    useWave<-!substr(rownames(currentBackResults),1,1) %in% c("X","O")
-  }else{
-    assignedWaves<-FALSE; useWave<-rep(TRUE, maxComp)
-  }
-
-  alpha<-alpha[useWave]; beta<-currentBackResults$Beta[useWave]
-  omega<-currentBackResults$Omega[useWave]
+  alpha<-paramsPerSignal$Alpha; beta<-paramsPerSignal$Beta
+  omega<-paramsPerSignal$Omega; maxComp<-length(alpha)
   cosPhi<-t(calculateCosPhi(alpha = alpha, beta = beta,
                             omega = omega, timePoints = seqTimes(nObs)))
-
+  
   ## Recalculate M and As
-  currentFormula<-as.formula(paste("vDatai~", paste("cosPhi[",1:sum(useWave),",]",
-                                                    sep="",collapse="+")))
+  currentFormula<-as.formula(paste("vDatai~", paste("cosPhi[",1:maxComp,",]",sep="",collapse="+")))
   regression<-lm(currentFormula)
   recalculatedM<-regression$coefficients[1]
   recalculatedAs<-as.vector(regression$coefficients[-1])
-
+  
   ## Calculate R2, including other waves
-  individualR2<-FMM:::PVj(vData = vDatai, timePoints = seqTimes(nObs),
-                          alpha = currentBackResults$Alpha,
-                          beta = currentBackResults$Beta, omega = currentBackResults$Omega)
-  currentBackResults$Var<-individualR2
-
-  # Arrays for the saving of the results
+  individualR2<-PVj(vData = vDatai, timePoints = seqTimes(nObs),
+                    alpha = paramsPerSignal$Alpha,
+                    beta = paramsPerSignal$Beta, omega = paramsPerSignal$Omega)
+  paramsPerSignal$Var<-individualR2
+  
   mResults<-rep(NA,maxComp); aResults<-rep(NA,maxComp)
-
-  ## If there are discarded waves, the R2 are calculated with just the assigned waves
-  if(assignedWaves & any(substr(rownames(currentBackResults),1,1)=="X")){
-    currentBackResults$assignedR2<-rep(NA,nrow(currentBackResults))
-    currentBackResults$assignedR2[useWave]<-FMM:::PVj(vData = vDatai, timePoints = seqTimes(nObs),
-                                                      alpha = alpha, beta = beta, omega = omega)
-
-    ## The A of the X waves is calculated with the other waves included
-    xIndex<-which(substr(rownames(currentBackResults),1,1)=="X")
-    xParams<-currentBackResults[xIndex,]
-    cosPhi<-rbind(cosPhi,t(calculateCosPhi(alpha = xParams$Alpha, beta = xParams$Beta,
-                                           omega = xParams$Omega, timePoints = seqTimes(nObs))))
-    currentFormula<-as.formula(paste("vDatai~", paste("cosPhi[",1:(sum(useWave)+1),",]",
-                                                      sep="",collapse="+")))
-    aResults[xIndex]<-lm(currentFormula)$coefficients[sum(useWave)+2]
-    currentBackResults$Var<-currentBackResults$assignedR2; currentBackResults$assignedR2<-NULL
-  }
-
-  # Results are saved
-  mResults[useWave]<-rep(recalculatedM, sum(useWave)); aResults[useWave]<-recalculatedAs
-  currentBackResults$M<-mResults; currentBackResults$A<-aResults
-
-  ## If there is any negative A, they become 0.001
-  # aValidContion<-aResults>0 | is.na(aResults)
-  # if(any(!aValidContion)) aResults[!aValidContion]<-0.001
-  #
-
+  mResults<-rep(recalculatedM, maxComp); aResults<-recalculatedAs
+  paramsPerSignal$M<-mResults; paramsPerSignal$A<-aResults
+  
   ## Negative A => Translation on the beta parameter
-  aValidContion<-aResults>0 | is.na(aResults)
+  aValidContion <- aResults>0 | is.na(aResults)
   if(any(!aValidContion)){
-    # Change beta parameters
-    currentBackResults$Beta[!aValidContion]<-(currentBackResults$Beta[!aValidContion]+pi)%%(2*pi)
-
-    # Change A parameters
-    currentBackResults$A[!aValidContion]<- -currentBackResults$A[!aValidContion]
+    paramsPerSignal$Beta[!aValidContion]<-(paramsPerSignal$Beta[!aValidContion]+pi)%%(2*pi)
+    paramsPerSignal$A[!aValidContion]<- -paramsPerSignal$A[!aValidContion]
   }
-
-  return(currentBackResults)
-}
-
-getFMMPeaksParams <- function(currentBackResults, nObs) {
-
-  M<-currentBackResults["M"][1,1]; A<-currentBackResults["A"]
-  assignedIndex<-!is.na(A)
-  A<-A[assignedIndex]; alpha<-currentBackResults["Alpha"][assignedIndex]
-  beta<-currentBackResults["Beta"][assignedIndex]; omega<-currentBackResults["Omega"][assignedIndex]
-  nComp <- length(alpha)
-
-  # Fiducial points estimation
-  peakU <- rep(NA,nComp); peakL <- rep(NA,nComp); tpeakU <- rep(NA,nComp)
-  tpeakL <- rep(NA,nComp); ZU <- rep(NA,nComp); ZL <- rep(NA,nComp)
-
-  peakU[assignedIndex]<-(alpha+2*atan2(1/omega*sin(-beta/2),cos(-beta/2)))%%(2*pi)
-  peakL[assignedIndex]<-(alpha+2*atan2(1/omega*sin((pi-beta)/2),cos((pi-beta)/2)))%%(2*pi)
-
-  tpeakU[assignedIndex]<-peakU[assignedIndex]*nObs/(2*pi) + 1
-  tpeakL[assignedIndex]<-peakL[assignedIndex]*nObs/(2*pi) + 1
-
-  # Signal estimation
-  phU <- lapply(1:nComp,function(k) (peakU[k]-alpha)/2)
-  phL <- lapply(1:nComp,function(k) (peakL[k]-alpha)/2)
-  ZU[assignedIndex] <- sapply(1:nComp, function(k) M+sum(A*cos(beta + 2*atan(omega*tan(phU[[k]]))), na.rm = TRUE))
-  ZL[assignedIndex] <- sapply(1:nComp, function(k) M+sum(A*cos(beta + 2*atan(omega*tan(phL[[k]]))), na.rm = TRUE))
-  names(ZU)<-NULL; names(ZL)<-NULL
-
-  fiducialPoints<-cbind(peakU, peakL, tpeakU, tpeakL, ZU, ZL)
-  colnames(fiducialPoints)<-c("PeakU", "PeakL", "tPeakU", "tPeakL", "ZU", "ZL")
-  rownames(fiducialPoints)<-rownames(currentBackResults)
-
-  return(as.data.frame(fiducialPoints))
-}
-
-
-#### Plot multiFMM functions ####
-plotMultiFMM<-function(vDatai, fittedWaves, currentBack, currentBackResults,
-                       filename=NA, leadNames=1:length(currentBackResults), path="./",
-                       plotToFile=TRUE, unassigned=FALSE, extra=FALSE){
-
-  nSignals<-length(currentBackResults)
-  if(plotToFile){
-    if(!is.na(filename)){
-      png(filename=paste(path,filename,"_Back_",currentBack,".png",sep=""), type = "cairo-png",
-          width=ifelse(nSignals<=12 | nSignals%%3!=0,
-                       300*nSignals,50*nSignals),
-          height=ifelse(nSignals<=12, 600,
-                        ifelse(nSignals%%3!=0, 600*round(nSignals/12), 700*round(nSignals/12))))
-    }else{
-      stop("Filename must be provided if plotToFile=TRUE")
-    }
-  }
-  if(nSignals>12 & nSignals%%3==0){
-    sixthSignals<-nSignals/3; sumPlotOrder<-1:nSignals; comPlotOrder<-(nSignals+1):(2*nSignals)
-    plotOrder<-c(rbind(sumPlotOrder, comPlotOrder))
-    plotLayout <- matrix(plotOrder, nrow = sixthSignals, ncol = (2*nSignals)/sixthSignals)
-    plotLayout <- rbind(plotLayout, rep((2*nSignals)+1, (2*nSignals)/sixthSignals))
-    layout(mat = plotLayout, heights = c(rep(0.95/sixthSignals,sixthSignals),0.05))
-    par(mar=c(0,0,0,0))
-  }else if(nSignals>4){
-    plotOrder<-1:(2*nSignals); halfSignals<-ceiling(nSignals/2)
-    while(length(plotOrder)%%4!=0 | length(plotOrder)%%halfSignals!=0){
-      plotOrder<-c(plotOrder, tail(plotOrder, 1))
-    }
-    plotLayout <- matrix(plotOrder, nrow = 4, ncol = halfSignals, byrow = TRUE)
-    plotLayout <- rbind(plotLayout, rep((2*nSignals)+1, halfSignals))
-    layout(mat = plotLayout, heights = c(0.1,0.1,0.1,0.1,0.1))
-    par(mar=c(0.1,0.1,0.1,0.1))
-  }else{
-    plotOrder<-1:(2*nSignals)
-    plotLayout <- matrix(plotOrder, nrow = 2, ncol = nSignals, byrow = TRUE)
-    plotLayout <- rbind(plotLayout, rep((2*nSignals)+1, nSignals))
-    layout(mat = plotLayout,heights = c(0.4,0.4,0.2))
-    par(mar=c(0.1,0.1,0.1,0.1))
-  }
-
-  limitsSumPlot<-NA
-  sapply(1:nSignals,function(x)
-      plotMultiFMM_Sum(vDatai=vDatai[!is.na(vDatai[x,]),x], fittedWaves = fittedWaves[[x]],
-                       currentBackResults = currentBackResults[[x]], currentBack=currentBack,
-                       filename=filename, leadName=leadNames[x], unassigned=unassigned,
-                       extra=extra, yLimits = limitsSumPlot))
-
-  sapply(1:nSignals,function(y)
-    plotMultiFMM_Comps(vDatai=vDatai[!is.na(vDatai[y,]),y], fittedWaves = fittedWaves[[y]],
-                       currentBackResults = currentBackResults[[y]],
-                       currentBack=currentBack, filename=filename, leadName=leadNames[y],
-                       plotLegend=FALSE, unassigned=unassigned))
-
-  # Add legend to the plot
-  plot(1, type = "n", axes=FALSE, xlab="", ylab="")
-  if(unassigned){
-    usedColors<-c(brewer.pal(n = 9, name = "Set1"), "aquamarine", "saddlebrown", "darkolivegreen1")
-    usedColors<-usedColors[1:nrow(currentBackResults[[1]])]
-    names(usedColors)<-1:nrow(currentBackResults[[1]])
-  }else{
-    usedColors<-getUsedColors(currentBackResults[[1]])
-  }
-
-  legend(x = "top",inset = 0, legend = names(usedColors), col=usedColors,
-         lwd=5, cex=1.2, horiz = TRUE)
-
-  if(plotToFile) dev.off()
-}
-
-plotMultiFMM_Sum<-function(vDatai, fittedWaves, currentBackResults, currentBack, leadName,
-                           filename=NA, path="./", plotToFile=FALSE, unassigned=FALSE,
-                           extra=FALSE, yLimits=NA){
-  par(mar = c(2,2,3,1))
-
-  if(!is.na(filename)){
-    ecgId_beatId<-strsplit(filename, "_")[[1]]
-    ecgId<-substr(ecgId_beatId[1], 3, nchar(ecgId_beatId[1]))
-    beatId<-ecgId_beatId[2]
-  }
-
-  nObs<-length(vDatai)
-  if(unassigned){
-    assignedCondition<-rep(TRUE,nrow(currentBackResults))
-  }else{
-    assignedCondition<-!substr(rownames(currentBackResults),1,1) %in% c("X","O")
-  }
-
-  assignedResults<-currentBackResults[assignedCondition,]
-  assignedWavesSum<-generateFMM(M = assignedResults$M[1], A = assignedResults$A,
-                                alpha = assignedResults$Alpha, beta = assignedResults$Beta,
-                                omega = assignedResults$Omega, length.out = nObs, plot = F)$y
-
-  ## Colors definition: color linked to assigned wave
-  totalR2<-sum(assignedResults$Var)
-
-  if(plotToFile){
-    png(filename=paste(path,"/02 Results/Plots/",filename,"_Back_",currentBack,".png",sep=""),
-        width=1200, height=900)
-  }
-
-  ## Fit plot
-  # if(!is.na(filename)){
-  #   mainText<-ifelse(extra,
-  #                    paste("Lead ",leadName,": Patient ",ecgId,", beat ",beatId,", extraback. ",currentBack,sep=""),
-  #                    paste("Lead ",leadName,": Patient ",ecgId,", beat ",beatId,", back. ",currentBack,sep=""))
-  # }else{
-    mainText<-paste("Signal ",leadName,", back. ",currentBack,sep="")
-  #}
-
-  assignedWavesSumPlot<-assignedWavesSum
-
-  if(any(is.na(yLimits))){
-    yLimits<-c(min(assignedWavesSumPlot,vDatai),
-               max(assignedWavesSumPlot,vDatai))
-  }
-
-  plot(1:nObs,vDatai,type="l",ylim=yLimits,cex.main=1.6,
-       main=mainText)
-  lines(1:nObs,assignedWavesSumPlot,col=4,lwd=2)
-  legend("bottomright",legend=sprintf(totalR2*100, fmt = "R2=%#.1f %%"), col=NA, lty=1,
-         lwd=NA, pch=NA, text.width=40, x.intersp=0.25, bty = "n", cex=1.5,
-         inset=c(0.2,0))
-
-  if(plotToFile) dev.off()
-}
-
-plotMultiFMM_Comps<-function(vDatai, fittedWaves, currentBackResults,
-                             currentBack, leadName, filename=NA, path="./",
-                             plotLegend=TRUE, plotToFile=FALSE, unassigned=FALSE,
-                             yLimits=NA){
-  par(mar = c(2,2,1,1))
-
-  maxComp<-nrow(currentBackResults)
-  if(unassigned){
-    assignedCondition<-rep(TRUE,nrow(currentBackResults))
-
-    ## Colors definition: color linked to assigned wave
-    assignedWavesColors<-c(brewer.pal(n = 9, name = "Set1"), "aquamarine", "saddlebrown", "darkolivegreen1")
-    assignedWavesColors<-assignedWavesColors[1:nrow(currentBackResults)]
-  }else{
-    assignedCondition<-!substr(rownames(currentBackResults),1,1) %in% c("X","O")
-
-    ## Colors definition: color linked to assigned wave
-    assignedWavesColors<-brewer.pal(n = 5, name = "Set1")
-    names(assignedWavesColors)<-c("R","T","S","P","Q")
-  }
-  otherWavesColors<-rev(brewer.pal(n = 7, name = "Set2"))
-
-  if(plotToFile){
-    png(filename=paste(path,"/02 Results/Plots/",filename,"_Back_",currentBack,".png",sep=""),
-        width=1200, height=900)
-  }
-
-  ## Components plot
-  if(any(is.na(yLimits))){
-    yLimits<-c(min(sapply(1:maxComp, function(x) fittedWaves[,x]-median(fittedWaves[,x]))),
-               max(sapply(1:maxComp, function(x) fittedWaves[,x]-median(fittedWaves[,x]))))
-  }
-
-  currentColor<-ifelse(assignedCondition[1],
-                       ifelse(unassigned,assignedWavesColors[1],
-                              assignedWavesColors[names(assignedWavesColors)==rownames(currentBackResults)[1]]),
-                       otherWavesColors[1])
-
-  plot(fittedWaves[,1]-median(fittedWaves[,1]), lty=ifelse(assignedCondition[1],1,2),
-       col=currentColor, type="l", lwd=3, ylim=yLimits)
-  if(assignedCondition[1]) usedColors<-c(currentColor)
-
-  if(maxComp>1){
-    notAssignedColorIndex<-ifelse(!assignedCondition[1],2,1)
-    assignedColorIndex<-ifelse(assignedCondition[1],2,1)
-    for(i in 2:maxComp){
-      currentColor<-ifelse(assignedCondition[i],
-                           ifelse(unassigned,assignedWavesColors[assignedColorIndex],
-                                  assignedWavesColors[names(assignedWavesColors)==rownames(currentBackResults)[i]]),
-                           otherWavesColors[notAssignedColorIndex])
-      if(assignedCondition[i]){
-        if(!exists("usedColors")){usedColors<-c(currentColor)
-        }else{usedColors<-c(usedColors, currentColor)}
-        assignedColorIndex<-assignedColorIndex+1
-      }else{
-        notAssignedColorIndex<-notAssignedColorIndex+1
-      }
-      lines(fittedWaves[,i]-median(fittedWaves[,i]),col=currentColor,
-            lwd=3, lty=ifelse(assignedCondition[i],1,2))
-    }
-  }
-
-  ## Legend of the components plot
-  if(plotLegend){
-    legend("bottomright",legend=paste("Wave",1:maxComp),col=usedColors,lty=rep(1,maxComp),
-           lwd=rep(2,maxComp),pch=rep(NA,maxComp), cex = 1, text.width=25, x.intersp=0.25,
-           y.intersp = 0.1, bty = "n")
-  }
-
-  if(plotToFile) dev.off()
-}
-
-getUsedColors<-function(currentBackResults){
-  maxComp<-nrow(currentBackResults)
-  assignedCondition<-!substr(rownames(currentBackResults),1,1) %in% c("X","O")
-
-  ## Colors definition: color linked to assigned wave
-  assignedWavesColors<-brewer.pal(n = 5, name = "Set1")
-  names(assignedWavesColors)<-c("R","T","S","P","Q")
-  otherWavesColors<-rev(brewer.pal(n = 7, name = "Set2"))
-
-  currentColor<-ifelse(assignedCondition[1],
-                       assignedWavesColors[names(assignedWavesColors)==rownames(currentBackResults)[1]],
-                       otherWavesColors[1])
-  usedColors<-c(currentColor)
-
-  notAssignedColorIndex<-ifelse(!assignedCondition[1],2,1)
-  assignedColorIndex<-ifelse(assignedCondition[1],2,1)
-  for(i in 2:maxComp){
-    currentColor<-ifelse(assignedCondition[i],
-                         assignedWavesColors[names(assignedWavesColors)==rownames(currentBackResults)[i]],
-                         otherWavesColors[notAssignedColorIndex])
-    if(assignedCondition[i]){
-      if(!exists("usedColors")){usedColors<-c(currentColor)
-      }else{usedColors<-c(usedColors, currentColor)}
-      assignedColorIndex<-assignedColorIndex+1
-    }else{
-      usedColors<-c(usedColors, currentColor)
-      notAssignedColorIndex<-notAssignedColorIndex+1
-    }
-  }
-  names(usedColors)<-rownames(currentBackResults)
-
-  usedColors<-usedColors[order(names(usedColors))]
-
-  return(usedColors)
+  
+  return(paramsPerSignal)
 }
