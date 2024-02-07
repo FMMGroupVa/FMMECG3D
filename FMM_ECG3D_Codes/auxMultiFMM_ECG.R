@@ -83,17 +83,15 @@ dos<-FALSE;tres<-FALSE;cuatro<-FALSE;cinco<-FALSE
     # Backfitting algorithm: component
     for(j in 1:nBack){
       #### First Step: determine optimal common parameters (just alpha or alpha and omega) ####
-      optimalParams <- optimizeCommonParameters(commonOmega = commonOmega, vDataMatrix = denseDataMatrix,
-                                                fittedWaves = fittedWaves, currentComp = j,
-                                                alphaGrid = alphaGrid, omegaGrid = omegaGrid, omegaMax = omegaMax,
-                                                errorWeights = errorWeights, usedApply = usedApply)
+      optimalParams <- optimizeAlphaOmega(vDataMatrix = denseDataMatrix, fittedWaves = fittedWaves, currentComp = j,
+                                          alphaGrid = alphaGrid, omegaGrid = omegaGrid, omegaMax = omegaMax,
+                                          errorWeights = errorWeights, usedApply = usedApply)
 
       #### Second Step: fit single FMM wave in each signal with common parameters ####
       for(signalIndex in 1:nSignals){
         vData<-denseDataMatrix[,signalIndex]; vData<-vData[!is.na(vData)];
         vData<-vData - apply(as.matrix(fittedWaves[[signalIndex]][,-j]), 1, sum)
-        fmmObjectList[[signalIndex]]<-optimizeOtherParameters(commonOmega = commonOmega, vData = vData,
-                                                              fixedParams = optimalParams, usedApply = usedApply)
+        fmmObjectList[[signalIndex]]<-optimizeOtherParameters(vData = vData, fixedParams = optimalParams)
         fittedWaves[[signalIndex]][,j]<-getFittedValues(fmmObjectList[[signalIndex]])
       }
 
@@ -103,7 +101,7 @@ dos<-FALSE;tres<-FALSE;cuatro<-FALSE;cinco<-FALSE
       paramsPerLead<-lapply(1:nSignals, function(x) rbind(paramsPerLead[[x]], params[x,], make.row.names=FALSE))
 
       ## Recalculate As and Ms
-      paramsPerLead<-lapply(1:nSignals, function(x) recalculateMA(vDatai=denseDataMatrix[,x], currentBackResults=paramsPerLead[[x]]))
+      paramsPerLead<-lapply(1:nSignals, function(x) recalculateMA(vDatai=denseDataMatrix[,x], paramsPerSignal=paramsPerLead[[x]]))
 
       ## Order by RelVar
       paramsPerLead<-setNames(paramsPerLead,leadNames)
@@ -121,7 +119,7 @@ dos<-FALSE;tres<-FALSE;cuatro<-FALSE;cinco<-FALSE
     paramsPerLead<-waveAssignation(paramsPerLead=paramsPerLead, nObs = nObs, alphaN=alphaN)
 storeSinMA<- paramsPerLead
     ## Recalculate As and Ms
-    paramsPerLead<-lapply(1:nSignals, function(x) recalculateMA(vDatai=denseDataMatrix[,x], currentBackResults=paramsPerLead[[x]]))
+    paramsPerLead<-lapply(1:nSignals, function(x) recalculateMA(vDatai=denseDataMatrix[,x], paramsPerSignal=paramsPerLead[[x]]))
 
     ## Order by RelVar
     paramsPerLead<-setNames(paramsPerLead,leadNames)
@@ -290,7 +288,7 @@ varX<-paramsPerLead
     unassignedWaves<-substr(rownames(paramsPerLead[[1]]),1,1)=="X"
     if(any(substr(rownames(paramsPerLead[[1]]),1,1)=="X")){
       paramsPerLead<-lapply(1:nSignals, function(x) recalculateMA(vDatai=denseDataMatrix[,x],
-                                                                  currentBackResults=paramsPerLead[[x]]))
+                                                                  paramsPerSignal=paramsPerLead[[x]]))
     }
 
     #### Plot ####
@@ -510,7 +508,7 @@ wavesInRelValOrder<-function(vDataMatrix, paramsPerLead, fittedWaves, unusedComp
       # Reorder waves parameters
       leadNames<-names(paramsPerLead)
       paramsPerLead<-lapply(1:nSignals, function(x) paramsPerLead[[x]][orderByRelVar,])
-      paramsPerLead<-lapply(1:nSignals, function(x) recalculateMA(vDatai=vDataMatrix[,x], currentBackResults=paramsPerLead[[x]]))
+      paramsPerLead<-lapply(1:nSignals, function(x) recalculateMA(vDatai=vDataMatrix[,x], paramsPerSignal=paramsPerLead[[x]]))
       paramsPerLead<-setNames(paramsPerLead,leadNames)
 
       # Reorder waves fitted values
@@ -550,18 +548,15 @@ searchAdditionalComponents<-function(vDataMatrix, fittedWaves, leadNames, alphaN
     j=extraBack[currentIndex]
 
     #### First Step: determine optimal common parameters (just alpha or alpha and omega) ####
-    optimalParams <- optimizeCommonParameters(commonOmega = commonOmega, vDataMatrix = vDataMatrix,
-                                              fittedWaves = fittedWaves, currentComp=j,
-                                              alphaGrid = alphaGrid, omegaGrid = omegaGrid, omegaMax = omegaMax,
-                                              errorWeights = errorWeights, usedApply = usedApply)
+    optimalParams <- optimizeAlphaOmega(vDataMatrix = vDataMatrix, fittedWaves = fittedWaves, currentComp=j,
+                                        alphaGrid = alphaGrid, omegaGrid = omegaGrid, omegaMax = omegaMax,
+                                        errorWeights = errorWeights, usedApply = usedApply)
 
     #### Second Step: fit single FMM wave in each signal with common parameters ####
     for(signalIndex in 1:nSignals){
       vData<-vDataMatrix[,signalIndex]; vData<-vData[!is.na(vData)]; nObs<-length(vData)
       vData<-vData - apply(as.matrix(fittedWaves[[signalIndex]]), 1, sum)
-      fmmObjectList[[signalIndex]]<-optimizeOtherParameters(commonOmega = commonOmega,
-                                                            vData = vData, fixedParams = optimalParams,
-                                                            usedApply = usedApply)
+      fmmObjectList[[signalIndex]]<-optimizeOtherParameters(vData = vData, fixedParams = optimalParams)
 
       fittedWaves[[signalIndex]][,j]<-getFittedValues(fmmObjectList[[signalIndex]])
     }
@@ -572,7 +567,7 @@ searchAdditionalComponents<-function(vDataMatrix, fittedWaves, leadNames, alphaN
     paramsPerLead<-lapply(1:nSignals, function(x) rbind(paramsPerLead[[x]], params[x,], make.row.names=FALSE))
 salida<-paramsPerLead
     ## Recalculate As and Ms
-    paramsPerLead<-lapply(1:nSignals, function(x) recalculateMA(vDatai=vDataMatrix[,x], currentBackResults=paramsPerLead[[x]]))
+    paramsPerLead<-lapply(1:nSignals, function(x) recalculateMA(vDatai=vDataMatrix[,x], paramsPerSignal=paramsPerLead[[x]]))
 
     # If no assignation is done, it is unnecessary to order by variance
     if(!searchAllExtraBack){
@@ -594,7 +589,7 @@ salida<-paramsPerLead
       paramsPerLead<-waveAssignation(paramsPerLead = paramsPerLead, alphaN = alphaN,
                                      nObs = nObs, unusedComp = unusedComp, inSearchAdditionalComponents=TRUE)
       ## Recalculate As and Ms
-      paramsPerLead<-lapply(1:nSignals, function(x) recalculateMA(vDatai=vDataMatrix[,x], currentBackResults=paramsPerLead[[x]]))
+      paramsPerLead<-lapply(1:nSignals, function(x) recalculateMA(vDatai=vDataMatrix[,x], paramsPerSignal=paramsPerLead[[x]]))
       paramsPerLead<-setNames(paramsPerLead,leadNames)
     }
 
