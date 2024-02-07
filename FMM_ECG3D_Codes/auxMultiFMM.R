@@ -91,13 +91,8 @@ fitMultiFMM <- function(vDataMatrix, nBack = 5, maxIter = 10, weightError = TRUE
   cluster <- usedApply_Cluster[[2]]
   if(!is.null(cluster)) parallel::stopCluster(cluster)
   
-  # Confidence Intervals calculus
-  CIs <- confint(paramsPerSignal = paramsPerWave, mData = vDataMatrix, 
-                 nBack = nBack, nSignals = nSignals, 
-                 compNames = 1:nBack,  confidenceLevel = 0.95)
-  
   #### Return results ####
-  return(list(paramsPerWave = paramsPerWave, Confints = CIs))
+  return(paramsPerWave = paramsPerWave)
 }
 
 
