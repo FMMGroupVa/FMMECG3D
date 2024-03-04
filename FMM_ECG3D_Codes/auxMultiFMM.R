@@ -5,163 +5,71 @@ require(R.utils)
 sourceDirectory("funcionesFMM/")
 # source("auxMultiFMMPlot.R") # incluidas al final
 
-#### Fit of multiFMM model functions ####
-fitMultiFMM <- function(vDataMatrix, nBack = 5, maxIter = 10, weightError = TRUE, 
-                        lengthAlphaGrid = 48, lengthOmegaGrid = 24, 
-                        alphaGrid = seq(0, 2*pi, length.out = lengthAlphaGrid),
-                        omegaMin = 0.0001, omegaMax = 1,
-                        omegaGrid = exp(seq(log(max(omegaMin, omegaMin)), log(1), length.out = lengthOmegaGrid)),
-                        parallelize = TRUE, confidenceLevel = 0.95){
-  
-  nSignals <- ncol(vDataMatrix)
-  
-  #### Preparations for the fit ####
-  
-  # Preparation of the paralellization
-  usedApply_Cluster <- getApply(parallelize = parallelize)
-  usedApply <- usedApply_Cluster[[1]]
-  
-  # The results are stored in:
-  paramsPerWave <- replicate(nSignals, simplify = FALSE, 
-                             data.frame(M=double(), A=double(), Alpha=double(), Beta=double(), Omega=double()))
-  fittedWaves<-lapply(1:nSignals,function(x){
-    vData<-vDataMatrix[,x]; vData<-vData[!is.na(vData)];
-    return(array(0,c(length(vData),nBack)))})
-  
-  # The MSE must be balanced in the fit of multiple signals
-  errorWeights<-rep(1,nSignals); totalMSE<-rep(Inf, maxIter)
-  
-  # Backfitting algorithm: iteration
-  currentBack<-1; continueBackfitting<-TRUE
-  cat(paste("Backfitting: ",sep=""))
-  
-  while(continueBackfitting) {
-    cat(paste(currentBack," ",sep=""))
-    fmmObjectList<-list()
-    paramsPerWave <- replicate(nSignals, simplify = FALSE,
-                               data.frame(M=double(), A=double(),
-                                          Alpha=double(), Beta=double(), Omega=double()))
-    # Backfitting algorithm: component
-    for(j in 1:nBack){
-      #### First Step: determine optimal common parameters (alpha and omega) ####
-      optimalParams <- optimizeAlphaOmega(vDataMatrix = vDataMatrix, fittedWaves = fittedWaves,
-                                          currentComp = j, alphaGrid = alphaGrid,
-                                          omegaGrid = omegaGrid, omegaMax = omegaMax,
-                                          errorWeights = errorWeights, usedApply = usedApply)
-      
-      #### Second Step: fit single FMM wave in each signal with common parameters ####
-      for(signalIndex in 1:nSignals){
-        vData<-vDataMatrix[,signalIndex]; vData<-vData[!is.na(vData)]; nObs<-length(vData)
-        vData<-vData - apply(as.matrix(fittedWaves[[signalIndex]][,-j]), 1, sum)
-        fmmObjectList[[signalIndex]]<-optimizeOtherParameters(vData = vData, fixedParams = optimalParams)
-        
-        fittedWaves[[signalIndex]][,j]<-getFittedValues(fmmObjectList[[signalIndex]])
-      }
-      
-      #### Get FMM parameters per wave ####
-      params<-data.frame("M"=sapply(fmmObjectList,getM),"A"=sapply(fmmObjectList,getA),"Alpha"=sapply(fmmObjectList,getAlpha),
-                         "Beta"=sapply(fmmObjectList,getBeta),"Omega"=sapply(fmmObjectList,getOmega), "Var"=rep(NA,nSignals))
-      paramsPerWave<-lapply(1:nSignals, function(x) rbind(paramsPerWave[[x]], params[x,]))
-      paramsPerWave<-lapply(1:nSignals, function(x) recalculateMA(vDatai=vDataMatrix[,x], paramsPerSignal=paramsPerWave[[x]]))
-      #### Error is weighted across signals ####
-      sigma<-sapply(1:nSignals, function(x){sum((vDataMatrix[,x]-apply(as.matrix(fittedWaves[[x]]), 1, sum))^2)/(nObs-1)})
-      if(weightError) errorWeights<-1/sigma
-      else errorWeights<-rep(1,nSignals)
-    }
-    totalMSE[currentBack]<-sum(sapply(1:nSignals, function(x){sum((vDataMatrix[,x]-apply(as.matrix(fittedWaves[[x]]), 1, sum))^2)}))
-    
-    # Check if backfitting should stop
-    stopCondition1<-currentBack>=maxIter
-    stopCondition2<-ifelse(currentBack>1, totalMSE[currentBack]>totalMSE[currentBack-1], FALSE)
-    if(stopCondition1 | stopCondition2){
-      stopCriteria<-ifelse(stopCondition1, "Maximum Iterations", "Minimum MSE")
-      cat(paste("  Stop: ", stopCriteria, "\n", sep=""))
-      continueBackfitting<-FALSE
-    }else{
-      currentBack<-currentBack+1
-    }
-  }
-  
-  plotMultiFMM(vDatai = vDataMatrix, fittedWaves = fittedWaves, currentBack = currentBack,
-               leadNames = colnames(vDataMatrix), paramsPerSignal = paramsPerWave, 
-               plotToFile = F, filename = NA)
-  
-  # Unname waves and stop parallelized cluster
-  for(i in 1:nSignals) rownames(paramsPerWave[[i]])<-1:nBack
-  cluster <- usedApply_Cluster[[2]]
-  if(!is.null(cluster)) parallel::stopCluster(cluster)
-  
-  #### Return results ####
-  return(paramsPerWave = paramsPerWave)
-}
-
-
 #### Internal multiFMM functions ####
 ## MultiFMM, first step: optimize common parameters
-
-step1FMM3D <- function(alphaOmegaParameters, vData, timePoints, sigmas = rep(1, ncol(vData))) {
-  alpha <- as.numeric(alphaOmegaParameters[1])
-  omega <- as.numeric(alphaOmegaParameters[2])
-  tStar <- alpha + 2*atan2(omega*sin((timePoints-alpha)/2), cos((timePoints-alpha)/2))
-  
-  fittedValues <- apply(vData, 2, function(x){
-    dM <- cbind(rep(1, length(x)), cos(tStar), sin(tStar))
-    mDeltaGamma <- solve(crossprod(dM), t(dM)%*%x)
-    yFit <- mDeltaGamma[1] + mDeltaGamma[2]*cos(tStar) + mDeltaGamma[3]*sin(tStar)
-    return(yFit)
-  })
-  residuales <- (vData - fittedValues)^2
-  logL <- -sum(t(sigmas^2*t(residuales))/2)
-  return(c(alpha, omega, logL))
-}
-
-logLik3DFMM1 <- function(alphaOmegaParameters, vData, timePoints, sigmas = rep(1, ncol(vData))) {
-  alpha <- (as.numeric(alphaOmegaParameters[1]) + 2*pi) %% (2*pi)
-  omega <- as.numeric(alphaOmegaParameters[2])
-  tStar <- alpha + 2*atan2(omega*sin((timePoints-alpha)/2), cos((timePoints-alpha)/2))
-  fittedValues <- apply(vData, 2, function(x){
-    dM <- cbind(rep(1, length(x)), cos(tStar), sin(tStar))
-    mDeltaGamma <- solve(t(dM)%*%dM)%*%t(dM)%*%x
-    yFit <- mDeltaGamma[1] + mDeltaGamma[2]*cos(tStar) + mDeltaGamma[3]*sin(tStar)
-    return(yFit)
-  })
-  residuales <- (vData - fittedValues)^2
-  logL <- -sum(t(sigmas^2*t(residuales))/2) # Cada columna por su sigma^2
-  return(logL)
-}
-
-optimizeAlphaOmega<-function(vDataMatrix, fittedWaves, currentComp,
+optimizeAlphaOmega<-function(vDataMatrix, baseGrid, fittedWaves, currentComp,
                              alphaGrid, omegaGrid, errorWeights, usedApply,
                              omegaMax = 0.7){
-  nObs<-nrow(vDataMatrix)
-  nSignals <- ncol(vDataMatrix)
-  timePoints = seqTimes(nObs)
+  
+  nSignals<-ncol(vDataMatrix)
+  step1OutputNames <- c("alpha","omega","RSS")
   
   grid <- expand.grid(alphaGrid, omegaGrid)
-  residualsMatrix <- vDataMatrix
   
-  rssMatrix<-matrix(NA, nrow = nrow(grid), ncol = (nSignals)+2)
+  rssMatrix<-matrix(NA, nrow = nrow(grid), ncol = (nSignals)+2,
+                    dimnames = list(NULL,c("alpha", "omega", paste("RSS", 1:nSignals, sep = ""))))
   rssMatrix[,1]<-grid[,1]; rssMatrix[,2]<-grid[,2]
   
+  #### Initial estimation based on step1 ####
+  residualsMatrix<-vDataMatrix
+  
   for(signalIndex in 1:nSignals){
-    vData<-vDataMatrix[,signalIndex]
+    vData<-vDataMatrix[,signalIndex]; vData<-vData[!is.na(vData)]; nObs<-length(vData)
     residualsMatrix[,signalIndex] <- vData - apply(as.matrix(fittedWaves[[signalIndex]][,-currentComp]), 1, sum)
     
-    step1 <- usedApply(FUN = FMM:::step1FMM, X = grid, vData = residualsMatrix[,signalIndex],
-                       timePoints = timePoints)
-    rssMatrix[,signalIndex+2] <- errorWeights[signalIndex]*step1[,6]
+    step1 <- lapply(FUN = step1FMM, X = baseGrid, vData = residualsMatrix[,signalIndex])
+    
+    step1 <- matrix(unlist(step1), ncol=3, byrow=T)
+    colnames(step1) <- step1OutputNames
+    rssMatrix[,signalIndex+2]<-errorWeights[signalIndex]*step1[,"RSS"]
   }
   
-  bestParamsIndex <- which.min(apply(rssMatrix[,-c(1:2)],1,mean))
-  initialParams <- as.numeric(rssMatrix[bestParamsIndex, c(1:2)])
-  
-  nelderMead <- optim(par = initialParams, fn = logLik3DFMM1, 
-                      vData = residualsMatrix, timePoints = timePoints, sigmas = errorWeights, 
-                      method = "L-BFGS-B", control = list(fnscale = -1), lower = c(-Inf, omegaGrid[1]), upper = c(Inf, 1))
-  nelderMead$par[2] <- (nelderMead$par[2] + 2*pi) %% (2*pi)
-  return(nelderMead$par) # Best alpha and omega
-}
+  # Solutions with big omegas are not permitted
+  notValidIndex<-rssMatrix[,"omega"]>omegaMax
+  if(all(notValidIndex)){
+    notValidIndex<-rep(FALSE,nrow(grid))
+  }
+  rssMatrix[notValidIndex,"RSS1"]<-Inf
 
+  # The best alpha and omega is the index that fulfills:
+  bestParamsIndex <- which.min(apply(rssMatrix[,-c(1:2)],1,mean))
+
+  # OPTIMIZACION ANTIGUA
+  # 1ro: calcular parametros M, A, beta para todas las leads 
+  
+  alpha <- rssMatrix[bestParamsIndex, 1]
+  omega <- rssMatrix[bestParamsIndex, 2]
+  
+  fullParameters <- rep(0,2+3*nSignals)
+  fullParameters[1] <- alpha
+  fullParameters[2] <- omega
+  timePoints <- seqTimes(nObs=nrow(vDataMatrix))
+  tStar <- 2*atan2(omega*sin((timePoints-alpha)/2), cos((timePoints-alpha)/2))
+  dM <- cbind(1+0*tStar, cos(tStar), sin(tStar))
+  dMP <- solve(t(dM)%*%dM)%*%t(dM)
+
+  for(signalIndex in 1:nSignals){
+    mDeltaGamma <- dMP %*% residualsMatrix[,signalIndex]
+    delta <- mDeltaGamma[2]
+    gamma <- mDeltaGamma[3]
+    fullParameters[3+((signalIndex-1)*3)] <- c(mDeltaGamma[1])
+    fullParameters[4+((signalIndex-1)*3)] <- c(sqrt(delta^2+gamma^2))
+    fullParameters[5+((signalIndex-1)*3)] <- (c(atan2(-gamma, delta)) + 2*pi) %% (2*pi)
+  }
+  nelderMead <- optim(par = round(fullParameters, 10), fn = step2_commonAlphaOmega,
+                      vDataMatrix = residualsMatrix, omegaMax = 0.7)
+  return(nelderMead$par[1:2])
+}
 ## MultiFMM, second step: determine non-common parameters
 optimizeOtherParameters <- function(vData, fixedParams, timePoints = seqTimes(length(vData))){
   
