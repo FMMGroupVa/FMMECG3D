@@ -7,6 +7,51 @@ sourceDirectory("funcionesFMM/")
 
 #### Internal multiFMM functions ####
 ## MultiFMM, first step: optimize common parameters
+step2_commonAlphaOmega <- function(initialParams, vDataMatrix, omegaMax){
+  
+  initialAlpha<-initialParams[1]; initialOmega<-initialParams[2]
+  nSignals<-ncol(vDataMatrix); residualSS<-0
+  rest1<-TRUE; rest2<-TRUE; rest3<-TRUE; rest4<-TRUE
+  
+  for(i in 1:nSignals){
+    parameters<-initialParams[3:5+((i-1)*3)]
+    vData<-vDataMatrix[,i]; vData<-vData[!is.na(vData)]; nObs<-length(vData)
+    timePoints<-seqTimes(nObs)
+    
+    # FMM model and residual sum of squares
+    modelFMM <- parameters[1] + parameters[2] *
+      cos(parameters[3]+2*atan2(initialOmega*sin((timePoints - initialAlpha)/2),
+                                cos((timePoints - initialAlpha)/2)))
+    residualSS <- residualSS+sum((modelFMM - vData)^2)/nObs
+    sigma <- sqrt(residualSS*nObs/(nObs - 5))
+    
+    # When amplitude condition is valid, it returns RSS
+    # else it returns infinite.
+    # amplitudeUpperBound <- parameters[1] + parameters[2]
+    # amplitudeLowerBound <- parameters[1] - parameters[2]
+    # rest1 <- amplitudeUpperBound <= max(vData) + 1.96*sigma
+    # if(!rest1){
+    #   warning("step2FMM_fixedAlphaOmega - rest1 not met: amplitudeUpperBound > max(x(t))")
+    #   rest1<-!rest1
+    # }
+    # rest2 <- amplitudeLowerBound >= min(vData) - 1.96*sigma
+    # if(!rest2){
+    #   warning("step2FMM_fixedAlphaOmega - rest2 not met: amplitudeLowerBound < max(x(t))")
+    #   rest2<-!rest2
+    # }
+    
+    # Other integrity conditions that must be met
+    if(parameters[2] < 0) rest3 <- FALSE  # A > 0
+    if(initialOmega < 0  |  initialOmega > omegaMax) rest4<-FALSE # omega in (0, omegaMax]
+  }
+  
+  #if(rest1 & rest2 & rest3 & rest4)  # Disabled rest1 and rest2
+  if(rest3 & rest4)  # Disabled rest1 and rest2
+    return(residualSS)
+  else
+    return(Inf)
+}
+
 optimizeAlphaOmega<-function(vDataMatrix, baseGrid, fittedWaves, currentComp,
                              alphaGrid, omegaGrid, errorWeights, usedApply,
                              omegaMax = 0.7){
