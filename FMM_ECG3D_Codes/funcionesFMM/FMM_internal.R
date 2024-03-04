@@ -24,36 +24,14 @@
 #    timePoints: one single period time points.
 # Returns a 6-length numerical vector: M, A, alpha, beta, omega and RSS
 ################################################################################
-step1FMM <- function(alphaOmegaParameters, vData, timePoints) {
-
-  alphaParameter <- alphaOmegaParameters[1]
-  omegaParameter <- alphaOmegaParameters[2]
-
-  mobiusTerm <- 2*atan(omegaParameter*tan((timePoints - alphaParameter)/2))
-  tStar <- alphaParameter + mobiusTerm
-
-  # Given alpha and omega, a cosinor model is computed with t* in
-  # order to obtain delta (cosCoeff) and gamma (sinCoeff).
-  # Linear Model exact expressions are used to improve performance.
-  costStar <- cos(tStar)
-  sentstar <- sin(tStar)
-  covMatrix <- stats::cov(cbind(vData, costStar, sentstar))
-  denominator <- covMatrix[2,2]*covMatrix[3,3] - covMatrix[2,3]^2
-  cosCoeff <- (covMatrix[1,2]*covMatrix[3,3] -
-                 covMatrix[1,3]*covMatrix[2,3])/denominator
-  sinCoeff <- (covMatrix[1,3]*covMatrix[2,2] -
-                 covMatrix[1,2]*covMatrix[2,3])/denominator
-  mParameter <- mean(vData) - cosCoeff*mean(costStar) - sinCoeff*mean(sentstar)
-
-  phiEst <- atan2(-sinCoeff, cosCoeff)
-  aParameter <- sqrt(cosCoeff^2 + sinCoeff^2)
-  betaParameter <- (phiEst+alphaParameter)%%(2*pi)
-
-  mobiusRegression <- mParameter + aParameter*cos(betaParameter + mobiusTerm)
-  residualSS <- sum((vData - mobiusRegression)^2)/length(timePoints)
-
-  return(c(mParameter, aParameter, alphaParameter, betaParameter,
-           omegaParameter, residualSS))
+step1FMM <- function(optBase, vData) {
+  
+  pars <- optBase[["base"]] %*% vData
+  mobiusRegression <- pars[1] + pars[2]*optBase[["cost"]] + pars[3]*optBase[["sint"]]
+  
+  residualSS <- sum((vData - mobiusRegression)^2)/length(vData)
+  
+  return(c(optBase[["alpha"]], optBase[["omega"]], residualSS))
 }
 
 ################################################################################
