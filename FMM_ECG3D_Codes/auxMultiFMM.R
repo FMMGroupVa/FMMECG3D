@@ -7,8 +7,6 @@ sourceDirectory("funcionesFMM/")
 
 #### Internal multiFMM functions ####
 
-
-
 step2_commonAlphaOmega <- function(initialParams, vDataMatrix, omegaMax){
   
   initialAlpha<-initialParams[1]; initialOmega<-initialParams[2]
