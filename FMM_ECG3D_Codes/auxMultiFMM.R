@@ -6,7 +6,9 @@ sourceDirectory("funcionesFMM/")
 # source("auxMultiFMMPlot.R") # incluidas al final
 
 #### Internal multiFMM functions ####
-## MultiFMM, first step: optimize common parameters
+
+
+
 step2_commonAlphaOmega <- function(initialParams, vDataMatrix, omegaMax){
   
   initialAlpha<-initialParams[1]; initialOmega<-initialParams[2]
@@ -200,7 +202,150 @@ recalculateMA<-function(vDatai, paramsPerSignal){
   
   return(paramsPerSignal)
 }
-                            
+
+fitMultiFMM<-function(vDataMatrix, commonOmega=TRUE, nBack=5, maxIter=10,
+                      weightError=TRUE, lengthAlphaGrid = 48, lengthOmegaGrid = 24,
+                      alphaGrid = seq(0, 2*pi, length.out = lengthAlphaGrid),
+                      omegaMin = 0.0001, omegaMax = 1,
+                      omegaGrid = exp(seq(log(omegaMin), log(omegaMax), length.out = lengthOmegaGrid)),
+                      numReps = 3, parallelize = TRUE, plotWithPlotECG=FALSE,
+                      plotJustLast=FALSE, filename=NA){
+
+  nSignals<-ncol(vDataMatrix)
+
+  # Preprocessing
+  #preprocessingWave<-list()
+
+  # Is there trend? Subtract it if its the case. Furthermore, normalize signal
+  #detrendPreprocesses<-multiDetrend(vDataMatrix, filename=NA)
+  #fittedTrends<-sapply(1:nSignals, function(x) detrendPreprocesses[,x]$fittedTrend)
+  #fittedTrends<-sapply(1:nSignals, function(x) detrendPreprocesses[,x])
+
+  ## Is there trend? Subtract it if its the case. Furthermore, normalize signal
+  #for(i in 1:nSignals) {
+  #  preprocessingWave[[i]]<-list()
+  #  preprocessingWave[[i]]$trend<-fittedTrends[,i]
+  #  preprocessingWave[[i]]$scaling<- minimax(vDataMatrix[,i]-preprocessingWave[[i]]$trend)
+  #  vDataMatrix[,i] <- preprocessingWave[[i]]$scaling$minimax
+  #}
+
+  #### Preparations for the fit ####
+
+  # Preparation of the paralellization
+  if(typeof(parallelize)=="logical"){
+    usedApply_Cluster <- getApply(parallelize = parallelize)
+    usedApply <- usedApply_Cluster[[1]]
+
+    ## The paralellized cluster can also be previously instantiated and used
+  }else{
+    usedApply <- parallelize
+  }
+
+  # The results are stored in:
+  paramsPerWave <- replicate(nSignals, simplify = FALSE,
+                             data.frame(M=double(), A=double(), Alpha=double(), Beta=double(), Omega=double()))
+  fittedWaves<-lapply(1:nSignals,function(x){
+    vData<-vDataMatrix[,x]; vData<-vData[!is.na(vData)];
+    return(array(0,c(length(vData),nBack)))})
+
+  # The MSE must be balanced in the fit of multiple signals
+  errorWeights<-rep(1,nSignals); totalMSE<-rep(Inf, maxIter)
+
+  # Backfitting algorithm: iteration
+  currentBack<-1; continueBackfitting<-TRUE
+  cat(paste("Backfitting: ",sep=""))
+
+  while(continueBackfitting) {
+    cat(paste(currentBack," ",sep=""))
+    fmmObjectList<-list()
+    paramsPerWave <- replicate(nSignals, simplify = FALSE,
+                               data.frame(M=double(), A=double(),
+                                          Alpha=double(), Beta=double(), Omega=double()))
+
+    # Backfitting algorithm: component
+    for(j in 1:nBack){
+      #### First Step: determine optimal common parameters (just alpha or alpha and omega) ####
+      optimalParams <- optimizeCommonParameters(commonOmega = commonOmega, vDataMatrix = vDataMatrix,
+                                                fittedWaves = fittedWaves, currentComp = j,
+                                                alphaGrid = alphaGrid, omegaGrid = omegaGrid, omegaMax = omegaMax,
+                                                errorWeights = errorWeights, usedApply = usedApply)
+
+      #### Second Step: fit single FMM wave in each signal with common parameters ####
+      for(signalIndex in 1:nSignals){
+        vData<-vDataMatrix[,signalIndex]; vData<-vData[!is.na(vData)]; nObs<-length(vData)
+        vData<-vData - apply(as.matrix(fittedWaves[[signalIndex]][,-j]), 1, sum)
+        fmmObjectList[[signalIndex]]<-optimizeOtherParameters(commonOmega = commonOmega,
+                                                              vData = vData, fixedParams = optimalParams,
+                                                              usedApply = usedApply)
+        fittedWaves[[signalIndex]][,j]<-getFittedValues(fmmObjectList[[signalIndex]])
+      }
+
+      #### Get FMM parameters per wave ####
+      params<-data.frame("M"=sapply(fmmObjectList,getM),"A"=sapply(fmmObjectList,getA),"Alpha"=sapply(fmmObjectList,getAlpha),
+                         "Beta"=sapply(fmmObjectList,getBeta),"Omega"=sapply(fmmObjectList,getOmega), "Var"=rep(NA,nSignals))
+      paramsPerWave<-lapply(1:nSignals, function(x) rbind(paramsPerWave[[x]], params[x,]))
+      ## Recalculate As and Ms
+      paramsPerWave<-lapply(1:nSignals, function(x) recalculateMA(vDatai=vDataMatrix[,x], currentBackResults=paramsPerWave[[x]]))
+
+      #### Error is weighted across signals ####
+      sigma<-sapply(1:nSignals, function(x){sum((vDataMatrix[,x]-apply(as.matrix(fittedWaves[[x]]),
+                                                                       1, sum))^2)/(nObs-1)})
+      if(weightError) errorWeights<-1/sigma
+      else errorWeights<-rep(1,nSignals)
+    }
+    totalMSE[currentBack]<-sum(sigma)
+
+    #### Plot ####
+    if(!plotJustLast){
+      if(!plotWithPlotECG){
+        plotMultiFMM(vDatai=vDataMatrix, fittedWaves = fittedWaves, currentBack = currentBack,
+                     leadNames=colnames(vDataMatrix), currentBackResults = paramsPerWave,
+                     plotToFile = !is.na(filename), unassigned=TRUE, filename = filename)
+      }else{
+        plotMultiFMM_ECG(vDataMatrix=vDataMatrix, fittedWaves = fittedWaves, leadNames = colnames(vDataMatrix), #leadNames = gsub("^.{0,4}", "", colnames(vDataMatrix)),
+                         currentBack = currentBack, paramsPerLead = paramsPerWave, unassigned = TRUE, filename = filename, plotToFile = TRUE)
+      }
+    }
+
+    # Check if backfitting should stop
+    stopCondition1<-currentBack>=maxIter
+    stopCondition2<-ifelse(currentBack>1,totalMSE[currentBack]>totalMSE[currentBack-1], FALSE)
+    if(stopCondition1 | stopCondition2){
+      stopCriteria<-ifelse(stopCondition1, "Maximum Iterations",
+                           "Minimum MSE")
+      cat(paste("  Stop: ",stopCriteria,"\n",sep=""))
+      continueBackfitting<-FALSE
+
+      #### Plot, if plotJustLast ####
+      if(plotJustLast){
+        if(!plotWithPlotECG){
+          plotMultiFMM(vDatai=vDataMatrix, fittedWaves = fittedWaves, currentBack = currentBack,
+                       leadNames=colnames(vDataMatrix), currentBackResults = paramsPerWave,
+                       plotToFile = !is.na(filename), unassigned=TRUE, filename = filename)
+        }else{
+          plotMultiFMM_ECG(vDataMatrix=vDataMatrix, fittedWaves = fittedWaves, leadNames = colnames(vDataMatrix), #leadNames = gsub("^.{0,4}", "", colnames(vDataMatrix)),
+                           currentBack = currentBack, paramsPerLead = paramsPerWave, unassigned = TRUE, filename = filename, plotToFile = TRUE)
+        }
+      }
+
+    }else{
+      currentBack<-currentBack+1
+    }
+  }
+
+  # Unname waves
+  for(i in 1:nSignals) rownames(paramsPerWave[[i]])<-1:nBack
+
+  # If the cluster has been instantiated in the function, it must be stopped
+  if(typeof(parallelize)=="logical"){
+    cluster <- usedApply_Cluster[[2]]
+    if(!is.null(cluster)) parallel::stopCluster(cluster)
+  }
+
+  #### Return results ####
+  return(paramsPerWave)
+}
+
 minimax<-function(y, minY=NULL, maxY=NULL){
   if(is.null(minY) | is.null(maxY))  minY<-min(y, na.rm = TRUE); maxY<-max(y, na.rm = TRUE)
   minimaxList<-list("minY"=minY, "maxY"=maxY,
