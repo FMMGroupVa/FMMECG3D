@@ -75,7 +75,7 @@ dos<-FALSE;tres<-FALSE;cuatro<-FALSE;cinco<-FALSE
   }
   
   grid <- expand.grid(alphaGrid, omegaGrid)
-  time = seqTimes(n)
+  time = seqTimes(nObs)
   
   mobiusBase = function(par, times){
     par <- as.numeric(par)
