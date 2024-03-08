@@ -58,7 +58,9 @@ dos<-FALSE;tres<-FALSE;cuatro<-FALSE;cinco<-FALSE
   totalMSE<-rep(Inf, maxIter)
   # Frontal and Horizontal Plane Leads should have different weights
   if(weightError){
-    signalWeights<-ifelse(grepl("I",leadNames,fixed = TRUE), 1/2, 1/6)
+    nFrontalLeads<-sum(grepl("I",leadNames,fixed = TRUE))
+    nHorizontalLeads<-length(leadNames)-nFrontalLeads
+    signalWeights<-ifelse(grepl("I",leadNames,fixed = TRUE), 1/nFrontalLeads, 1/nHorizontalLeads)
     names(signalWeights)<-leadNames; errorWeights<-signalWeights
   }
 
@@ -99,8 +101,7 @@ dos<-FALSE;tres<-FALSE;cuatro<-FALSE;cinco<-FALSE
     for(j in 1:nBack){
       #### First Step: determine optimal common parameters (just alpha or alpha and omega) ####
       optimalParams <- optimizeAlphaOmega(vDataMatrix = denseDataMatrix, baseGrid = optBase, fittedWaves = fittedWaves, currentComp = j,
-                                          alphaGrid = alphaGrid, omegaGrid = omegaGrid, omegaMax = omegaMax,
-                                          errorWeights = errorWeights, usedApply = usedApply)
+                                          omegaMax = omegaMax, errorWeights = errorWeights, usedApply = usedApply)
 
       #### Second Step: fit single FMM wave in each signal with common parameters ####
       for(signalIndex in 1:nSignals){
@@ -463,7 +464,7 @@ fitMultiFMM_justR2<-function(vDataMatrix, commonOmega=TRUE, weightError=TRUE, sh
   PRD <- function(vData, pred) return(sqrt((sum((vData - pred)^2))/(sum(vData^2))))
   PRDj <- function(vData, alpha, beta, omega){
     nComponents <- length(alpha); timePoints = FMM::seqTimes(length(vData))
-    waves <- FMM:::calculateCosPhi(alpha = alpha, beta = beta, omega = omega, timePoints = timePoints)
+    waves <-  calculateCosPhi(alpha = alpha, beta = beta, omega = omega, timePoints = timePoints)
 
     # The percentage of variability explained up to wave i is determined
     cumulativePRD <- sapply(1:nComponents, function(x){PRD(vData, predict(lm(vData ~ waves[,1:x])))})
@@ -563,8 +564,7 @@ searchAdditionalComponents<-function(vDataMatrix, baseGrid , fittedWaves, leadNa
 
     #### First Step: determine optimal common parameters (just alpha or alpha and omega) ####
     optimalParams <- optimizeAlphaOmega(vDataMatrix = vDataMatrix, baseGrid = baseGrid, fittedWaves = fittedWaves, currentComp=j,
-                                        alphaGrid = alphaGrid, omegaGrid = omegaGrid, omegaMax = omegaMax,
-                                        errorWeights = errorWeights, usedApply = usedApply)
+                                        omegaMax = omegaMax, errorWeights = errorWeights, usedApply = usedApply)
     
     #### Second Step: fit single FMM wave in each signal with common parameters ####
     for(signalIndex in 1:nSignals){
@@ -632,10 +632,6 @@ salida<-paramsPerLead
 sigmaAll<-getAssignedSigma(vDataMatrix=vDataMatrix, fittedWaves=fittedWaves, paramsPerLead=paramsPerLead,
                             weightError=weightError, signalWeights=signalWeights, assigned=FALSE)
   totalMSE<-sum(sigma)
-  
-  plotMultiFMM_ECG(vDataMatrix=vDataMatrix, fittedWaves = fittedWaves, leadNames = leadNames,
-                   currentBack = 0, paramsPerLead = paramsPerLead,
-                   filename = singleFilename, plotToFile = FALSE, path=plotPath)
   
   return(list("paramsPerLead"=paramsPerLead, "extraComponent"=currentIndex+5,
               "fittedWaves"=fittedWaves, "errorWeights"=errorWeights, "totalMSE"=totalMSE, salida))
@@ -721,7 +717,7 @@ getAssignedSigma<-function(vDataMatrix, fittedWaves, paramsPerLead, weightError,
 # Function to get the betas, Ms and As of the unused leads in the fitting process
 getOtherBetas_MAs<-function(vDataMatrix, fragmentResults, otherLeads){
   derivedLeads<-c("III", "aVR", "aVL", "aVF"); wavesNames<-c("P","Q","R","S","T")
-  nLeads<-length(otherLeads); timePoints<-FMM:::seqTimes(nrow(vDataMatrix))
+  nLeads<-length(otherLeads); timePoints<- seqTimes(nrow(vDataMatrix))
 
   # Already calculated results extraction
   alphas<-fragmentResults[1,paste0("Alpha",wavesNames)]; omegas<-fragmentResults[1,paste0("Omega",wavesNames)]
@@ -767,10 +763,10 @@ getOtherBetas_MAs<-function(vDataMatrix, fragmentResults, otherLeads){
           }
         }
         mMatrix[1,i]<-derivedM(mI=mI, mII=mII, coefI=currentCoefs$CoefI, coefII=currentCoefs$CoefII)
-        cosPhi <- FMM:::calculateCosPhi(alpha = alphas, beta = betaMatrix[,i], omega = omegas, timePoints = timePoints)
+        cosPhi <-  calculateCosPhi(alpha = alphas, beta = betaMatrix[,i], omega = omegas, timePoints = timePoints)
         mod_aMatrix<-aMatrix
         if(any(is.na(alphas))){ cosPhi[,is.na(alphas)]<-0; mod_aMatrix[is.na(alphas),i]<-0}
-        r2Matrix[1,i] <- FMM:::PV(vData, pred = (cosPhi%*%mod_aMatrix[,i])+as.vector(mMatrix[1,i]))
+        r2Matrix[1,i] <-  PV(vData, pred = (cosPhi%*%mod_aMatrix[,i])+as.vector(mMatrix[1,i]))
 
         # Otherwise, M, A and beta estimation by minimum error
       }else{
@@ -794,7 +790,7 @@ getOtherBetas_MAs<-function(vDataMatrix, fragmentResults, otherLeads){
         })
 
         # M and As calculus
-        cosPhi <- FMM:::calculateCosPhi(alpha = alphas, beta = betaMatrix[,i],
+        cosPhi <-  calculateCosPhi(alpha = alphas, beta = betaMatrix[,i],
                                         omega = omegas, timePoints = timePoints)
         if(any(is.na(alphas))) cosPhi[,is.na(alphas)]<-0
         linearModel <- lm(vData ~ cosPhi)
@@ -806,7 +802,7 @@ getOtherBetas_MAs<-function(vDataMatrix, fragmentResults, otherLeads){
           # Change beta parameter
           betaMatrix[!aValidContion,i]<-(betaMatrix[!aValidContion,i]+pi)%%(2*pi)
 
-          cosPhi <- FMM:::calculateCosPhi(alpha = alphas, beta = betaMatrix[,i],
+          cosPhi <-  calculateCosPhi(alpha = alphas, beta = betaMatrix[,i],
                                           omega = omegas, timePoints = timePoints)
           if(any(is.na(alphas))) cosPhi[,is.na(alphas)]<-0
           linearModel <- lm(vData ~ cosPhi)
@@ -814,7 +810,7 @@ getOtherBetas_MAs<-function(vDataMatrix, fragmentResults, otherLeads){
 
         aMatrix[,i] <- as.vector(linearModel$coefficients[-1])
         mMatrix[1,i] <- as.vector(linearModel$coefficients[1])
-        r2Matrix[1,i] <- FMM:::PV(vData, pred = linearModel$fitted.values)
+        r2Matrix[1,i] <-  PV(vData, pred = linearModel$fitted.values)
       }
 
     ## Some patients have not all leads recorded
@@ -1987,7 +1983,7 @@ fmmConstructor<-function(arguments){
   nObs<-length(arguments$data)
   fittedValues<-generateFMM(M=arguments$M, A=arguments$A, alpha=arguments$alpha, beta=arguments$beta,
                             omega=arguments$omega, length.out = nObs, plot = FALSE)$y
-  FMM:::FMM(
+   FMM(
     timePoints=FMM::seqTimes(nObs),
     data=arguments$data, summarizedData=arguments$data, nPeriods=1,
     fittedValues=fittedValues,
@@ -2388,7 +2384,7 @@ generateMultiFMM<-function(alpha, omega, mVector, aMatrix, betaMatrix,
 
   for(i in 1:nSignals){
     vDataMatrix[,i] <- as.vector(mVector[i] + aMatrix[,i]%*%
-                               t(FMM:::calculateCosPhi(alpha = alpha, beta = betaMatrix[,i],
+                               t( calculateCosPhi(alpha = alpha, beta = betaMatrix[,i],
                                                  omega = omega, timePoints = timePoints)))
   }
   colnames(vDataMatrix)<-colMatrixNames
