@@ -8,8 +8,7 @@ fitMultiFMM_ECG<-function(vDataMatrix, annotation,
                           nBack=5, extraBack=2, extraBackP=3, maxIter=10, numReps = 3, excellentR2=0.98,
                           lengthAlphaGrid = 48, lengthOmegaGrid = 24, alphaGrid = seq(0, 2*pi, length.out = lengthAlphaGrid),
                           omegaMin = 0.0001, omegaMax = 1, omegaGrid = exp(seq(log(omegaMin), log(omegaMax), length.out = lengthOmegaGrid)),
-
- 				  ecgId=NA, beatId=NA, patientClass=NA, patientSuperclass=NA,
+			  ecgId=NA, beatId=NA, patientClass=NA, patientSuperclass=NA,
                           resultsFile=NA, plotToFile=FALSE, saveResults=FALSE,
                           plotBasename=NA, plotPath="./03 Results", moveBackplotsFolder=TRUE){
 
