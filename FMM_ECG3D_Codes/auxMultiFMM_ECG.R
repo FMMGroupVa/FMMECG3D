@@ -1,11 +1,11 @@
 #### Dependencies ####
 source("auxMultiFMM.R")
 source("thresholdsMultiFMM_ECG.R")
-
+require("FMM")
 #### Fit of multiFMM_ECG model functions ####
 fitMultiFMM_ECG<-function(vDataMatrix, annotation,
                           commonOmega=TRUE, weightError=TRUE, showProgress=TRUE, parallelize = FALSE,
-                          nBack=5, extraBack=2, extraBackP=3, maxIter=10, numReps = 3, excellentR2=0.98,
+                          nBack=5, extraBack=2, extraBackP=3, maxIter=10, excellentR2=0.98,
                           lengthAlphaGrid = 48, lengthOmegaGrid = 24, alphaGrid = seq(0, 2*pi, length.out = lengthAlphaGrid),
                           omegaMin = 0.0001, omegaMax = 1, omegaGrid = exp(seq(log(omegaMin), log(omegaMax), length.out = lengthOmegaGrid)),
 			  ecgId=NA, beatId=NA, patientClass=NA, patientSuperclass=NA,
@@ -34,16 +34,6 @@ dos<-FALSE;tres<-FALSE;cuatro<-FALSE;cinco<-FALSE
     singleFilename<-plotBasename
   }
 
-  # Preparation of the paralellization
-  if(typeof(parallelize)=="logical"){
-    usedApply_Cluster <- getApply(parallelize = parallelize)
-    usedApply <- usedApply_Cluster[[1]]
-
-  ## The paralellized cluster can also be previously instantiated and used
-  }else{
-    usedApply <- parallelize
-  }
-
   # The results are stored in:
   paramsPerLead <- replicate(nSignals, simplify = FALSE,
                              data.frame(M=double(), A=double(), Alpha=double(), Beta=double(), Omega=double()))
@@ -60,7 +50,7 @@ dos<-FALSE;tres<-FALSE;cuatro<-FALSE;cinco<-FALSE
     nFrontalLeads<-sum(grepl("I",leadNames,fixed = TRUE))
     nHorizontalLeads<-length(leadNames)-nFrontalLeads
     signalWeights<-ifelse(grepl("I",leadNames,fixed = TRUE), 1/nFrontalLeads, 1/nHorizontalLeads)
-    names(signalWeights)<-leadNames; errorWeights<-signalWeights
+    names(signalWeights)<-leadNames; errorWeights<-signalWeights/sum(signalWeights)
   }
 
   # Backfitting algorithm: iteration
@@ -88,19 +78,21 @@ dos<-FALSE;tres<-FALSE;cuatro<-FALSE;cinco<-FALSE
   }
   
   optBase <- apply(grid, 1, FUN = mobiusBase, times = time, simplify = FALSE)
-  
+
   while(continueBackfitting) {
+    
     if(showProgress) cat(paste(currentBack," ",sep=""))
     fmmObjectList<-list()
     paramsPerLead <- replicate(nSignals, simplify = FALSE,
                                data.frame(M=double(), A=double(),
                                           Alpha=double(), Beta=double(), Omega=double()))
-
+    
     # Backfitting algorithm: component
     for(j in 1:nBack){
+      
       #### First Step: determine optimal common parameters (just alpha or alpha and omega) ####
       optimalParams <- optimizeAlphaOmega(vDataMatrix = denseDataMatrix, baseGrid = optBase, fittedWaves = fittedWaves, currentComp = j,
-                                          omegaMax = omegaMax, errorWeights = errorWeights, usedApply = usedApply)
+                                          omegaMax = omegaMax, errorWeights = errorWeights)
 
       #### Second Step: fit single FMM wave in each signal with common parameters ####
       for(signalIndex in 1:nSignals){
@@ -126,16 +118,14 @@ dos<-FALSE;tres<-FALSE;cuatro<-FALSE;cinco<-FALSE
       #### Error is weighted across signals ####
       sigma<-getAssignedSigma(vDataMatrix=denseDataMatrix, fittedWaves=fittedWaves, paramsPerLead=paramsPerLead,
                               weightError=weightError, signalWeights=signalWeights, assigned=FALSE)
-
-	}
-  
+    }
+    
     #### Wave assignment ####
     paramsPerLead<-setNames(paramsPerLead,leadNames)
     paramsPerLead<-waveAssignation(paramsPerLead=paramsPerLead, nObs = nObs, alphaN=alphaN)
   storeSinMA<- paramsPerLead
     ## Recalculate As and Ms
     paramsPerLead<-lapply(1:nSignals, function(x) recalculateMA(vDatai=denseDataMatrix[,x], paramsPerSignal=paramsPerLead[[x]]))
-    # print(paramsPerLead)
     
     ## Order by RelVar
     paramsPerLead<-setNames(paramsPerLead,leadNames)
@@ -146,6 +136,10 @@ dos<-FALSE;tres<-FALSE;cuatro<-FALSE;cinco<-FALSE
     assignedWaves<-substr(rownames(paramsPerLead[[1]]),1,1)!="X"
     sigma<-getAssignedSigma(vDataMatrix=denseDataMatrix, fittedWaves=fittedWaves, paramsPerLead=paramsPerLead,
                             weightError=weightError, signalWeights=signalWeights, assigned=TRUE)
+
+    errorWeights <- signalWeights/sigma
+    errorWeights <- errorWeights/sum(errorWeights)
+    
     totalMSE[currentBack]<-sum(sigma)
 
     # If there is a wave that is not assigned, search for more
@@ -153,8 +147,7 @@ dos<-FALSE;tres<-FALSE;cuatro<-FALSE;cinco<-FALSE
     if(any(unusedWave)){
       additionalComponents<-searchAdditionalComponents(vDataMatrix=denseDataMatrix, baseGrid = optBase, fittedWaves=fittedWaves, alphaN=alphaN, leadNames=leadNames,
                                                        weightError=weightError, errorWeights=errorWeights, signalWeights=signalWeights,
-                                                       extraBack=(nBack+1):(nBack+extraBack), paramsPerLead=paramsPerLead, usedApply=usedApply,
-                                                       singleFilename=singleFilename, plotBacks=FALSE)
+                                                       extraBack=(nBack+1):(nBack+extraBack), paramsPerLead=paramsPerLead, singleFilename=singleFilename, plotBacks=FALSE)
       # The extra components find the other waves
       if(sum(assignedWaves)<sum(substr(rownames(additionalComponents$paramsPerLead[[1]]),1,1)!="X")){
         paramsPerLead<-additionalComponents$paramsPerLead
@@ -164,9 +157,12 @@ dos<-FALSE;tres<-FALSE;cuatro<-FALSE;cinco<-FALSE
         fittedWaves<-additionalComponents$fittedWaves
         errorWeights<-additionalComponents$errorWeights
         extraComponent<-additionalComponents$extraComponent
+        
         assignedWaves<-substr(rownames(paramsPerLead[[1]]),1,1)!="X"
         sigma<-getAssignedSigma(vDataMatrix=denseDataMatrix, fittedWaves=fittedWaves, paramsPerLead=paramsPerLead,
                                 weightError=weightError, signalWeights=signalWeights, assigned = TRUE)
+        errorWeights <- signalWeights/sigma # Error waves calculated with assigned waves
+        errorWeights <- errorWeights/sum(errorWeights)
         totalMSE[currentBack]<-sum(sigma)
       }
     }
@@ -186,9 +182,9 @@ dos<-FALSE;tres<-FALSE;cuatro<-FALSE;cinco<-FALSE
         paramsPerLead<-setNames(paramsPerLead,leadNames)
         additionalComponents<-searchAdditionalComponents(vDataMatrix=denseDataMatrix, baseGrid = optBase, fittedWaves=fittedWaves, alphaN=alphaN, leadNames=leadNames,
                                                          weightError=weightError, errorWeights=errorWeights, signalWeights=signalWeights,
-                                                         extraBack = extraBacksNeeded, paramsPerLead=paramsPerLead, usedApply=usedApply,
+                                                         extraBack = extraBacksNeeded, paramsPerLead=paramsPerLead,
                                                          singleFilename=singleFilename, plotBacks=FALSE, searchAllExtraBack=TRUE)
-
+    
         oldWavesNames<-rownames(paramsPerLead[[1]])
         oldWavesNames<-c(oldWavesNames, paste("X",c(extraBacksNeeded-7)+20,sep=""))
         paramsPerLead<-additionalComponents$paramsPerLead
@@ -243,6 +239,8 @@ varX<-paramsPerLead
           assignedWaves<-substr(rownames(paramsPerLead[[1]]),1,1)!="X"
           sigma<-getAssignedSigma(vDataMatrix=denseDataMatrix, fittedWaves=fittedWaves, paramsPerLead=paramsPerLead,
                                   weightError=weightError, signalWeights=signalWeights)
+          errorWeights <- signalWeights/sigma
+          errorWeights <- errorWeights/sum(errorWeights)
           totalMSE[currentBack]<-sum(sigma)
         }
       }
@@ -262,6 +260,8 @@ varX<-paramsPerLead
         paramsPerLead<-lastChanceP_paramsPerLead; assignedWaves<-substr(rownames(paramsPerLead[[1]]),1,1)!="X"
         sigma<-getAssignedSigma(vDataMatrix=denseDataMatrix, fittedWaves=fittedWaves, paramsPerLead=paramsPerLead,
                                 weightError=weightError, signalWeights=signalWeights, assigned=TRUE)
+        errorWeights <- signalWeights/sigma
+        errorWeights <- errorWeights/sum(errorWeights)
         totalMSE[currentBack]<-sum(sigma)
       }else{
         previouslyFoundWaves<-rownames(paramsPerLead[[1]])[substr(rownames(paramsPerLead[[1]]),1,1)!="X"]
@@ -271,8 +271,8 @@ varX<-paramsPerLead
         additionalComponentsP<-searchAdditionalComponents(vDataMatrix=denseDataMatrix, baseGrid = optBase, fittedWaves=fittedWaves, alphaN=alphaN, leadNames=leadNames,
                                                           weightError=weightError, errorWeights=errorWeights, signalWeights=signalWeights,
                                                           extraBack = firstBackToSearch:(nBack+extraBack+extraBackP), paramsPerLead=paramsPerLead,
-                                                          usedApply=usedApply, singleFilename=singleFilename, plotBacks=FALSE, searchAllExtraBack=FALSE)
-
+                                                          singleFilename=singleFilename, plotBacks=FALSE, searchAllExtraBack=FALSE)
+        
         # This search is more strict than the habitual P search
         if("P" %in% rownames(additionalComponentsP$paramsPerLead[[1]])){
           pFarIndex<-which(rownames(additionalComponentsP$paramsPerLead[[1]])=="P")
@@ -295,6 +295,8 @@ varX<-paramsPerLead
           assignedWaves<-substr(rownames(paramsPerLead[[1]]),1,1)!="X"
           sigma<-getAssignedSigma(vDataMatrix=denseDataMatrix, fittedWaves=fittedWaves, paramsPerLead=paramsPerLead,
                                   weightError=weightError, signalWeights=signalWeights, assigned=TRUE)
+          errorWeights <- signalWeights/sigma
+          errorWeights <- errorWeights/sum(errorWeights)
           totalMSE[currentBack]<-sum(sigma)
         }
       }
@@ -306,6 +308,7 @@ varX<-paramsPerLead
       paramsPerLead<-lapply(1:nSignals, function(x) recalculateMA(vDatai=denseDataMatrix[,x],
                                                                   paramsPerSignal=paramsPerLead[[x]]))
     }
+
     if(showProgress) plotMultiFMM_ECG(vDataMatrix=denseDataMatrix, fittedWaves = fittedWaves, leadNames = leadNames,
                                       currentBack = currentBack, paramsPerLead=paramsPerLead,
                                       filename = singleFilename, plotToFile = plotToFile, path=plotPath)
@@ -381,11 +384,6 @@ varX<-paramsPerLead
     }
   }
 
-  # If the cluster has been instantiated in the function, it must be stopped
-  if(typeof(parallelize)=="logical"){
-    cluster <- usedApply_Cluster[[2]]
-    if(!is.null(cluster)) parallel::stopCluster(cluster)
-  }
 
   #### Save results ####
    if(plotToFile & moveBackplotsFolder){
@@ -407,7 +405,7 @@ if(!dos & !tres & !cuatro)varX<-storeSinMA
 
 # Used to fit a MultiFMM of m1 components and save just plots + R2
 fitMultiFMM_justR2<-function(vDataMatrix, commonOmega=TRUE, weightError=TRUE, showProgress=TRUE, parallelize = FALSE,
-                             nBack=12, maxIter=5, numReps = 3, excellentR2=0.98,
+                             nBack=12, maxIter=5, excellentR2=0.98,
                              lengthAlphaGrid = 48, lengthOmegaGrid = 24, alphaGrid = seq(0, 2*pi, length.out = lengthAlphaGrid),
                              omegaMin = 0.0001, omegaMax = 1, omegaGrid = exp(seq(log(omegaMin), log(omegaMax), length.out = lengthOmegaGrid)),
 
@@ -432,7 +430,7 @@ fitMultiFMM_justR2<-function(vDataMatrix, commonOmega=TRUE, weightError=TRUE, sh
   singleFilename<-paste0(paste("HR",ecgId,"_", beatId,collapse = "", sep=""),"_m=",nBack)
 
   #### Fit models ####
-  multiFmm<-fitMultiFMM(vDataMatrix=denseDataMatrix, commonOmega=commonOmega, nBack=nBack, maxIter=maxIter, numReps = numReps,
+  multiFmm<-fitMultiFMM(vDataMatrix=denseDataMatrix, commonOmega=commonOmega, nBack=nBack, maxIter=maxIter,
                          weightError=weightError, lengthAlphaGrid = lengthAlphaGrid, alphaGrid = alphaGrid,
                          lengthOmegaGrid = lengthOmegaGrid, omegaMin = omegaMin, omegaMax = omegaMax, omegaGrid = omegaGrid,
                          parallelize = parallelize, plotWithPlotECG=TRUE, filename=singleFilename, plotJustLast = TRUE)
@@ -547,12 +545,12 @@ wavesInRelValOrder<-function(vDataMatrix, paramsPerLead, fittedWaves, unusedComp
 
 searchAdditionalComponents<-function(vDataMatrix, baseGrid , fittedWaves, leadNames, alphaN,
                                      weightError, errorWeights, signalWeights, paramsPerLead,
-                                     usedApply, singleFilename, plotBacks=FALSE, commonOmega=TRUE,
+                                     singleFilename, plotBacks=FALSE, commonOmega=TRUE,
                                      extraBack=6:7, lengthAlphaGrid = 48, lengthOmegaGrid = 24,
                                      alphaGrid = seq(0, 2*pi, length.out = lengthAlphaGrid),
                                      omegaMin = 0.0001, omegaMax = 1,
                                      omegaGrid = exp(seq(log(omegaMin), log(omegaMax), length.out = lengthOmegaGrid)),
-                                     numReps = 3, searchAllExtraBack=FALSE){
+                                     searchAllExtraBack=FALSE){
 
   validComponentFound<-FALSE; currentIndex<-1; nSignals<-ncol(vDataMatrix); fmmObjectList<-list()
   unusedComp<-which(substr(rownames(paramsPerLead[[1]]),1,1)=="X")
@@ -563,7 +561,7 @@ searchAdditionalComponents<-function(vDataMatrix, baseGrid , fittedWaves, leadNa
 
     #### First Step: determine optimal common parameters (just alpha or alpha and omega) ####
     optimalParams <- optimizeAlphaOmega(vDataMatrix = vDataMatrix, baseGrid = baseGrid, fittedWaves = fittedWaves, currentComp=j,
-                                        omegaMax = omegaMax, errorWeights = errorWeights, usedApply = usedApply)
+                                        omegaMax = omegaMax, errorWeights = errorWeights)
     
     #### Second Step: fit single FMM wave in each signal with common parameters ####
     for(signalIndex in 1:nSignals){
@@ -594,7 +592,9 @@ salida<-paramsPerLead
     #### Error is weighted across signals ####
     sigma<-getAssignedSigma(vDataMatrix=vDataMatrix, fittedWaves=fittedWaves, paramsPerLead=paramsPerLead,
                             weightError=weightError, signalWeights=signalWeights, assigned=FALSE)
-
+    errorWeights <- signalWeights/sigma
+    errorWeights <- errorWeights/sum(errorWeights)
+    
     #### Wave preassignment ####
     paramsPerLead<-setNames(paramsPerLead,leadNames)
     # If just other waves are searched, no assignation is needed
@@ -627,6 +627,8 @@ salida<-paramsPerLead
   #### Return final error weights and total MSE ####
   sigma<-getAssignedSigma(vDataMatrix=vDataMatrix, fittedWaves=fittedWaves, paramsPerLead=paramsPerLead,
                           weightError=weightError, signalWeights=signalWeights, assigned=TRUE)
+  errorWeights <- signalWeights/sigma
+  errorWeights <- errorWeights/sum(errorWeights)
 #Cambio
 sigmaAll<-getAssignedSigma(vDataMatrix=vDataMatrix, fittedWaves=fittedWaves, paramsPerLead=paramsPerLead,
                             weightError=weightError, signalWeights=signalWeights, assigned=FALSE)
@@ -765,7 +767,7 @@ getOtherBetas_MAs<-function(vDataMatrix, fragmentResults, otherLeads){
         cosPhi <-  calculateCosPhi(alpha = alphas, beta = betaMatrix[,i], omega = omegas, timePoints = timePoints)
         mod_aMatrix<-aMatrix
         if(any(is.na(alphas))){ cosPhi[,is.na(alphas)]<-0; mod_aMatrix[is.na(alphas),i]<-0}
-        r2Matrix[1,i] <-  PV(vData, pred = (cosPhi%*%mod_aMatrix[,i])+as.vector(mMatrix[1,i]))
+        r2Matrix[1,i] <-  FMM:::PV(vData, pred = (cosPhi%*%mod_aMatrix[,i])+as.vector(mMatrix[1,i]))
 
         # Otherwise, M, A and beta estimation by minimum error
       }else{
@@ -809,7 +811,7 @@ getOtherBetas_MAs<-function(vDataMatrix, fragmentResults, otherLeads){
 
         aMatrix[,i] <- as.vector(linearModel$coefficients[-1])
         mMatrix[1,i] <- as.vector(linearModel$coefficients[1])
-        r2Matrix[1,i] <-  PV(vData, pred = linearModel$fitted.values)
+        r2Matrix[1,i] <-  FMM:::PV(vData, pred = linearModel$fitted.values)
       }
 
     ## Some patients have not all leads recorded
@@ -1982,7 +1984,7 @@ fmmConstructor<-function(arguments){
   nObs<-length(arguments$data)
   fittedValues<-generateFMM(M=arguments$M, A=arguments$A, alpha=arguments$alpha, beta=arguments$beta,
                             omega=arguments$omega, length.out = nObs, plot = FALSE)$y
-   FMM(
+   FMM:::FMM(
     timePoints=FMM::seqTimes(nObs),
     data=arguments$data, summarizedData=arguments$data, nPeriods=1,
     fittedValues=fittedValues,
@@ -1996,13 +1998,24 @@ plotMultiFMM_ECG<-function(vDataMatrix, fittedWaves, currentBack, paramsPerLead,
                            filename=NA, leadNames=1:length(paramsPerLead), path="./03 Results",
                            plotToFile=TRUE, unassigned=FALSE, extra=FALSE){
   
-  # print(paramsPerLead)
   # If some of the 8 leads are unavailable, it should be noted on the plot
   allEightLeads<-c("I", "II", "V1", "V2", "V3", "V4", "V5", "V6")
   nSignals<-length(allEightLeads); halfSignals<-round(nSignals/2); signalIndex<-0
   plotLayout <- matrix(c(1:(2*nSignals), rep((2*nSignals)+1, halfSignals)),
                        nrow = 5, ncol = halfSignals, byrow = TRUE)
-
+  
+  # CAMBIO/CHANGE - JUST PLOT ASSIGNED WAVES - SIGS 9 LINEAS  
+  jCount <- 1
+  for(i in 1:8){
+    if(allEightLeads[i] %in% leadNames){
+      assignedCondition<-!substr(rownames(paramsPerLead[[jCount]]),1,1) %in% c("X","O")
+      fittedWaves[[jCount]] <- (fittedWaves[[jCount]])[,assignedCondition]
+      paramsPerLead[[jCount]] <- paramsPerLead[[jCount]][assignedCondition,]
+      maxComp <- ncol(fittedWaves[[jCount]])
+      jCount <- jCount+1
+    }
+  }
+  
   if(plotToFile){
     if(!is.na(filename)){
       # Check if subdirectory exists; if not, create it

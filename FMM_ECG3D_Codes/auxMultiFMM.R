@@ -1,15 +1,25 @@
 
 #### Dependencies ####
 require("RColorBrewer")
-require(R.utils)
-sourceDirectory("funcionesFMM/")
-# source("auxMultiFMMPlot.R") # incluidas al final
 
 #### Internal multiFMM functions ####
 ## MultiFMM, first step: optimize common parameters
 
-# Function for optimization: only depends on (alpha, omega).
+step1FMM3D <- function(optBase, vDataMatrix, 
+                       weights = rep(1, nrow(as.matrix(vDataMatrix)))) {
+  
+  pars <- optBase[["base"]] %*% vDataMatrix
+  mobiusRegression <- apply(X = pars, MARGIN = 2, FUN = function(x){
+    mobiusRegression <- x[1] + x[2]*optBase[["cost"]] + x[3]*optBase[["sint"]]
+  }, simplify = TRUE)
+  
+  residuals <- (vDataMatrix - mobiusRegression)^2
+  
+  RSS <- sum(t(weights*t(residuals)))
+  return(c(optBase[["alpha"]], optBase[["omega"]], RSS))
+}
 
+# Function for optimization: only depends on (alpha, omega).
 step2_commonAlphaOmega <- function(initialParams, vDataMatrix, weights){
   
   initialAlpha<-as.numeric(initialParams[1])
@@ -34,7 +44,7 @@ step2_commonAlphaOmega <- function(initialParams, vDataMatrix, weights){
 }
 
 optimizeAlphaOmega<-function(vDataMatrix, baseGrid, fittedWaves, currentComp,
-                             errorWeights, usedApply, omegaMax = 0.7){
+                             errorWeights, omegaMax = 0.7){
   
   residualsMatrix<-as.matrix(vDataMatrix)
   for(signalIndex in 1:ncol(vDataMatrix)){
@@ -76,7 +86,7 @@ optimizeOtherParameters <- function(vData, fixedParams, timePoints = seqTimes(le
   fittedFMMvalues <- mDeltaGamma[1] + mDeltaGamma[2]*cos(tStar) + mDeltaGamma[3]*sin(tStar)
   SSE <- sum((vData-fittedFMMvalues)^2)
   
-  fmmObject<-FMM(
+  fmmObject<-FMM:::FMM(
     M = mDeltaGamma[1],
     A = sqrt(delta^2+gamma^2),
     alpha = (alpha+2*pi)%%(2*pi),
@@ -86,7 +96,7 @@ optimizeOtherParameters <- function(vData, fixedParams, timePoints = seqTimes(le
     summarizedData = vData,
     fittedValues = fittedFMMvalues,
     SSE = SSE,
-    R2 = PV(vData, fittedFMMvalues),
+    R2 = FMM:::PV(vData, fittedFMMvalues),
     nIter = 0
   )
   
